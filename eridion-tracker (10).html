@@ -1,0 +1,1735 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eridion Glass — Order Tracker</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
+
+  :root {
+    --bg: #0d0f14;
+    --surface: #141720;
+    --surface2: #1c2030;
+    --border: #252a3a;
+    --accent: #4fffb0;
+    --accent2: #ff6b4a;
+    --accent3: #4a9eff;
+    --text: #e8eaf0;
+    --muted: #6b7280;
+    --warn: #fbbf24;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* HEADER */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 18px;
+    letter-spacing: -0.5px;
+  }
+  .logo span { color: var(--accent); }
+
+  nav { display: flex; gap: 6px; }
+  nav button {
+    background: none;
+    border: 1px solid transparent;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.5px;
+  }
+  nav button:hover { color: var(--text); border-color: var(--border); }
+  nav button.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 500; }
+
+  /* LAYOUT */
+  main { flex: 1; padding: 28px 32px; max-width: 1400px; width: 100%; margin: 0 auto; }
+
+  /* SCAN PANEL */
+  .scan-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    margin-bottom: 24px;
+  }
+
+  .scan-panel h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .scan-panel p { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    padding: 36px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--bg);
+    position: relative;
+  }
+  .drop-zone:hover, .drop-zone.dragging {
+    border-color: var(--accent);
+    background: rgba(79, 255, 176, 0.04);
+  }
+  .drop-zone input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .drop-icon { font-size: 32px; margin-bottom: 10px; }
+  .drop-zone h3 { font-family: 'Syne', sans-serif; font-size: 15px; margin-bottom: 4px; }
+  .drop-zone p { margin: 0; font-size: 12px; }
+
+  /* FORM */
+  .extracted-form {
+    display: none;
+    margin-top: 20px;
+    animation: fadeIn 0.3s ease;
+  }
+  .extracted-form.visible { display: block; }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  .form-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .form-header h3 { font-family: 'Syne', sans-serif; font-size: 15px; }
+  .badge {
+    background: rgba(79, 255, 176, 0.15);
+    color: var(--accent);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+  }
+  .badge.warn { background: rgba(251, 191, 36, 0.15); color: var(--warn); }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .field label {
+    display: block;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+    margin-bottom: 5px;
+    text-transform: uppercase;
+  }
+  .field input, .field select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    padding: 8px 10px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+
+  .line-items { margin-bottom: 20px; }
+  .line-items h4 {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .line-item {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .form-actions { display: flex; gap: 10px; }
+
+  .btn {
+    padding: 9px 20px;
+    border-radius: 7px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s;
+  }
+  .btn-primary { background: var(--accent); color: #000; font-weight: 500; }
+  .btn-primary:hover { background: #3de8a0; }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-danger { background: rgba(255, 107, 74, 0.15); color: var(--accent2); border: 1px solid rgba(255,107,74,0.3); }
+  .btn-danger:hover { background: rgba(255, 107, 74, 0.25); }
+
+  /* LOADING */
+  .loading {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    padding: 20px;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+  }
+  .loading.visible { display: flex; }
+  .spinner {
+    width: 20px; height: 20px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* STATS BAR */
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .stat-card .label {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .stat-card .value {
+    font-family: 'Syne', sans-serif;
+    font-size: 24px;
+    font-weight: 700;
+  }
+  .stat-card .value.green { color: var(--accent); }
+  .stat-card .value.orange { color: var(--accent2); }
+  .stat-card .value.blue { color: var(--accent3); }
+
+  /* TABLE */
+  .table-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .table-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .table-header h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  .filters {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .filters input, .filters select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    padding: 6px 10px;
+    outline: none;
+  }
+  .filters input:focus, .filters select:focus { border-color: var(--accent); }
+  .filters input { width: 200px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    text-align: left;
+    padding: 10px 14px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+    cursor: pointer;
+  }
+  tbody tr:hover { background: var(--surface2); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody td {
+    padding: 10px 14px;
+    font-size: 13px;
+    white-space: nowrap;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .status-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.3px;
+    font-weight: 500;
+  }
+  .status-paid { background: rgba(79,255,176,0.12); color: var(--accent); }
+  .status-open { background: rgba(255,107,74,0.12); color: var(--accent2); }
+  .status-pending { background: rgba(251,191,36,0.12); color: var(--warn); }
+
+  /* VENDOR REPORT */
+  .vendor-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+  }
+
+  .vendor-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .vendor-card:hover { border-color: var(--accent); }
+
+  .vendor-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--border);
+  }
+  .vendor-name {
+    font-family: 'Syne', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .vendor-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    background: var(--surface2);
+    padding: 3px 8px;
+    border-radius: 4px;
+    color: var(--muted);
+  }
+
+  .vendor-stats {
+    padding: 14px 18px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .vstat label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    display: block;
+    margin-bottom: 3px;
+  }
+  .vstat .num {
+    font-family: 'Syne', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+  }
+  .vstat .num.green { color: var(--accent); }
+  .vstat .num.orange { color: var(--accent2); }
+
+  .vendor-due-list { padding: 12px 18px; }
+  .vendor-due-list h4 {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .due-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .due-item:last-child { border-bottom: none; }
+  .due-item .due-date { font-family: 'DM Mono', monospace; font-size: 11px; }
+  .due-item .overdue { color: var(--accent2); }
+  .due-item .soon { color: var(--warn); }
+  .due-item .ok { color: var(--muted); }
+
+  /* DETAIL MODAL */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px;
+    width: 560px;
+    max-height: 80vh;
+    overflow-y: auto;
+    animation: fadeIn 0.2s ease;
+  }
+  .modal-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .modal-sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  .modal-section { margin-bottom: 18px; }
+  .modal-section h4 {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .modal-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .modal-row:last-child { border-bottom: none; }
+  .modal-row span:first-child { color: var(--muted); }
+  .modal-input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    padding: 4px 8px;
+    outline: none;
+    width: 60%;
+    text-align: right;
+    transition: border-color 0.15s;
+  }
+  .modal-input:focus { border-color: var(--accent); background: var(--bg); }
+  select.modal-input { cursor: pointer; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border); }
+
+  /* INVOICE UPLOAD IN MODAL */
+  .invoice-section {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    margin-top: 12px;
+  }
+  .invoice-section h5 {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .invoice-drop {
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    padding: 16px;
+    text-align: center;
+    cursor: pointer;
+    position: relative;
+    font-size: 12px;
+    color: var(--muted);
+    transition: all 0.15s;
+  }
+  .invoice-drop:hover { border-color: var(--accent3); color: var(--accent3); }
+  .invoice-drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 12px 18px;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    color: var(--accent);
+    z-index: 999;
+    animation: slideUp 0.3s ease;
+    display: none;
+  }
+  .toast.show { display: block; }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+  }
+  .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+  .empty-state p { font-size: 14px; }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  .section-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .section-sub { color: var(--muted); font-size: 13px; margin-bottom: 22px; }
+
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+  }
+  .pagination span { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); }
+  .page-btns { display: flex; gap: 6px; }
+  .page-btn {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    padding: 5px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  .page-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><span style="color:#4fffb0;font-family:Syne,sans-serif;font-size:20px;font-weight:800;">ERIDION</span><span style="color:#fff;font-family:Syne,sans-serif;font-size:20px;font-weight:800;"> GLASS</span><span style="color:var(--muted);font-size:11px;font-family:'DM Mono',monospace;margin-left:10px;vertical-align:middle;">ORDER TRACKER</span></div>
+  <nav>
+    <button class="active" onclick="switchTab('scan')">+ Scan Order</button>
+    <button onclick="switchTab('orders')">All Orders</button>
+    <button onclick="switchTab('vendors')">Vendor Reports</button>
+    <button onclick="syncToDrive()" style="background:rgba(74,158,255,0.1);color:var(--accent3);border-color:rgba(74,158,255,0.3)">☁ Drive Sync</button>
+    <button onclick="showImportExport()" style="background:rgba(79,255,176,0.1);color:var(--accent);border-color:rgba(79,255,176,0.3)">⇅ Import/Export</button>
+    <button onclick="clearAllData()" style="background:rgba(255,107,74,0.1);color:var(--accent2);border-color:rgba(255,107,74,0.3)" title="Use if app won't load">⚠ Reset</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- SCAN TAB -->
+  <div id="tab-scan" class="tab-content active">
+    <div class="section-title">Scan a New Order</div>
+    <p class="section-sub">Upload any sales order or invoice (PDF or image) — AI will extract all fields automatically.</p>
+
+    <div class="scan-panel">
+      <h2>📄 Upload Document</h2>
+      <p>Drop a vendor sales order, PO confirmation, or invoice. Works with any vendor format.</p>
+
+      <div id="apiKeySection" style="margin-bottom:16px;padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;">
+        <label style="display:block;font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:6px;">Anthropic API Key</label>
+        <div style="display:flex;gap:8px;">
+          <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-..." style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'DM Mono',monospace;font-size:12px;padding:8px 10px;outline:none;">
+          <button class="btn btn-secondary" onclick="saveApiKey()" style="white-space:nowrap;font-size:12px;">Save Key</button>
+        </div>
+        <div id="apiKeyStatus" style="font-size:11px;color:var(--muted);margin-top:5px;"></div>
+      </div>
+
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg,.webp" onchange="handleFile(event)">
+        <div class="drop-icon">⬆</div>
+        <h3>Drop file here or click to browse</h3>
+        <p style="color:var(--muted)">PDF, PNG, JPG, WEBP supported</p>
+      </div>
+
+      <div class="loading" id="loadingState">
+        <div class="spinner"></div>
+        <span id="loadingText">Scanning document with AI...</span>
+      </div>
+
+      <div class="extracted-form" id="extractedForm">
+        <div class="form-header">
+          <h3>Extracted Data</h3>
+          <span class="badge" id="confidenceBadge">AI Extracted</span>
+          <span class="badge warn" id="docTypeBadge" style="display:none">Sales Order</span>
+        </div>
+
+        <div class="form-grid">
+          <div class="field">
+            <label>EG PO / Job #</label>
+            <input type="text" id="f_po" placeholder="e.g. 23500-1">
+          </div>
+          <div class="field">
+            <label>Customer / Site</label>
+            <input type="text" id="f_customer" placeholder="Builder - Address">
+          </div>
+          <div class="field">
+            <label>Job Type</label>
+            <input type="text" id="f_jobtype" placeholder="showers, mirrors...">
+          </div>
+          <div class="field">
+            <label>Material</label>
+            <select id="f_material">
+              <option>glass</option>
+              <option>hardware</option>
+              <option>Hardware</option>
+              <option>kit</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Vendor</label>
+            <select id="f_vendor">
+              <option value="IMP">IMP — Imperial Tempered Glass</option>
+              <option value="FHC">FHC</option>
+              <option value="M3">M3</option>
+              <option value="DFG">DFG</option>
+              <option value="WF">WF</option>
+              <option value="Sky">Sky</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Vendor WO / Order #</label>
+            <input type="text" id="f_vendor_wo" placeholder="Order number">
+          </div>
+          <div class="field">
+            <label>Order Date</label>
+            <input type="date" id="f_order_date">
+          </div>
+          <div class="field">
+            <label>Amount ($)</label>
+            <input type="number" id="f_amount" step="0.01" placeholder="0.00">
+          </div>
+          <div class="field">
+            <label>Invoice #</label>
+            <input type="text" id="f_invoice_num" placeholder="If already received">
+          </div>
+          <div class="field">
+            <label>Invoice Date</label>
+            <input type="date" id="f_invoice_date">
+          </div>
+          <div class="field">
+            <label>Due Date</label>
+            <input type="date" id="f_due_date">
+          </div>
+          <div class="field">
+            <label>Completion Date</label>
+            <input type="date" id="f_completion_date">
+          </div>
+          <div class="field">
+            <label>Status</label>
+            <select id="f_status">
+              <option value="open">Open</option>
+              <option value="paid">Paid</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="line-items" id="lineItemsSection" style="display:none">
+          <h4>Line Items</h4>
+          <div id="lineItemsContainer"></div>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn btn-primary" onclick="saveOrder()">Save Order</button>
+          <button class="btn btn-secondary" onclick="clearForm()">Clear</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ORDERS TAB -->
+  <div id="tab-orders" class="tab-content">
+    <div class="section-title">All Orders</div>
+    <p class="section-sub">Click any row to view details, attach an invoice, or update status.</p>
+
+    <div class="stats-bar" id="statsBar">
+      <div class="stat-card">
+        <div class="label">Total Orders</div>
+        <div class="value" id="statTotal">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Open / Unpaid</div>
+        <div class="value orange" id="statOpen">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Total Open ($)</div>
+        <div class="value orange" id="statOpenAmt">$0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Past Due</div>
+        <div class="value" style="color:var(--accent2)" id="statOverdue">0</div>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <div class="table-header">
+        <h2>Orders</h2>
+        <div class="filters">
+          <input type="text" id="searchInput" placeholder="Search PO, vendor, customer..." oninput="renderTable()">
+          <select id="filterVendor" onchange="renderTable()">
+            <option value="">All Vendors</option>
+          </select>
+          <select id="filterStatus" onchange="renderTable()">
+            <option value="">All Statuses</option>
+            <option value="open">Open</option>
+            <option value="paid">Paid</option>
+          </select>
+          <button class="btn btn-secondary" onclick="exportToExcel()" style="white-space:nowrap">⬇ Export Excel</button>
+          <button class="btn btn-secondary" onclick="showEmailReport()" style="white-space:nowrap">✉ Email Report</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>EG PO</th>
+              <th>Customer / Site</th>
+              <th>Type</th>
+              <th>Vendor</th>
+              <th>Vendor WO</th>
+              <th>Order Date</th>
+              <th>Completion</th>
+              <th>Amount</th>
+              <th>Invoice #</th>
+              <th>Due Date</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="ordersBody"></tbody>
+        </table>
+      </div>
+      <div class="pagination">
+        <span id="pageInfo">Showing 0–0 of 0</span>
+        <div class="page-btns">
+          <button class="page-btn" id="prevBtn" onclick="changePage(-1)">← Prev</button>
+          <button class="page-btn" id="nextBtn" onclick="changePage(1)">Next →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VENDOR REPORTS TAB -->
+  <div id="tab-vendors" class="tab-content">
+    <div class="section-title">Vendor Reports</div>
+    <p class="section-sub">Outstanding balances, payment due dates, and open orders by vendor.</p>
+    <div class="vendor-grid" id="vendorGrid"></div>
+  </div>
+
+</main>
+
+<!-- DETAIL MODAL -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+  <div class="modal" id="detailModal">
+    <div class="modal-title" id="modalTitle">Order Details</div>
+    <div class="modal-sub" id="modalSub"></div>
+
+    <div class="modal-section">
+      <h4>Order Info</h4>
+      <div id="modalOrderInfo"></div>
+    </div>
+
+    <div class="modal-section" id="modalInvoiceSection">
+      <h4>Invoice</h4>
+      <div id="modalInvoiceInfo"></div>
+      <div class="invoice-section" id="invoiceUploadArea">
+        <h5>Attach Invoice</h5>
+        <div class="invoice-drop" id="invoiceDrop">
+          <input type="file" id="invoiceFileInput" accept=".pdf,.png,.jpg,.jpeg,.webp" onchange="handleInvoiceFile(event)">
+          📎 Drop invoice PDF/image here to auto-extract
+        </div>
+        <div class="loading" id="invoiceLoading" style="margin-top:10px">
+          <div class="spinner"></div>
+          <span>Reading invoice...</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="markPaid()">Mark as Paid</button>
+      <button class="btn btn-secondary" onclick="saveModalChanges()">Save Changes</button>
+      <button class="btn btn-danger" onclick="deleteOrder()">Delete</button>
+      <button class="btn btn-secondary" onclick="closeModal(null, true)" style="margin-left:auto">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- EMAIL REPORT MODAL -->
+<div class="modal-overlay" id="emailModalOverlay" onclick="closeEmailModal(event)">
+  <div class="modal" style="width:520px">
+    <div class="modal-title">✉ Weekly Due Report</div>
+    <div class="modal-sub">Send yourself a summary of open orders due in the next 14 days via Gmail.</div>
+    <div class="modal-section">
+      <h4>Send To</h4>
+      <div class="field" style="margin-bottom:12px">
+        <label>Your Email Address</label>
+        <input type="email" id="emailTo" placeholder="you@example.com" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;padding:8px 10px;outline:none">
+      </div>
+    </div>
+    <div class="modal-section">
+      <h4>Preview</h4>
+      <div id="emailPreview" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12px;font-family:'DM Mono',monospace;white-space:pre-wrap;max-height:260px;overflow-y:auto;color:var(--muted);line-height:1.6"></div>
+    </div>
+    <div class="loading" id="emailLoading">
+      <div class="spinner"></div>
+      <span>Sending via Gmail...</span>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="sendEmailReport()">Send Report</button>
+      <button class="btn btn-secondary" onclick="closeEmailModal(null,true)" style="margin-left:auto">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORT/EXPORT MODAL -->
+<div class="modal-overlay" id="importExportOverlay" onclick="closeImportExport(event)">
+  <div class="modal" style="width:580px">
+    <div class="modal-title">⇅ Import / Export Data</div>
+    <div class="modal-sub">Move your data between the Claude.ai version and this local file.</div>
+
+    <div class="modal-section">
+      <h4>Export — Copy data OUT of this app</h4>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Copy the text below and save it somewhere safe, or paste it into the other version.</p>
+      <textarea id="exportData" readonly style="width:100%;height:120px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--accent);font-family:'DM Mono',monospace;font-size:11px;padding:10px;resize:none;outline:none;" placeholder="Click 'Generate Export' to create your data snapshot..."></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn btn-primary" onclick="generateExport()">Generate Export</button>
+        <button class="btn btn-secondary" onclick="copyExport()">Copy to Clipboard</button>
+      </div>
+    </div>
+
+    <div class="modal-section">
+      <h4>Import — Paste data INTO this app</h4>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Paste either the JSON export OR a CSV exported from the All Orders tab. <strong style="color:var(--accent2)">This will replace all current data.</strong></p>
+      <textarea id="importData" style="width:100%;height:120px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'DM Mono',monospace;font-size:11px;padding:10px;resize:none;outline:none;" placeholder="Paste your exported data here..."></textarea>
+      <div style="margin-top:8px">
+        <button class="btn btn-primary" onclick="doImport()">Import Data</button>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeImportExport(null,true)" style="margin-left:auto">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const STORAGE_KEY = 'eridion_orders_v2';
+let orders = [];
+let currentPage = 0;
+const PAGE_SIZE = 25;
+let activeOrderIdx = null;
+let filteredOrders = [];
+
+// Storage - works in Claude.ai and as local file
+async function storageGet(key) {
+  try {
+    if (window.storage && typeof window.storage.get === 'function') {
+      const r = await window.storage.get(key);
+      return r ? r.value : null;
+    }
+  } catch(e) {}
+  try { return localStorage.getItem(key); } catch(e) { return null; }
+}
+
+async function storageSet(key, value) {
+  try {
+    if (window.storage && typeof window.storage.set === 'function') {
+      await window.storage.set(key, value);
+      return;
+    }
+  } catch(e) {}
+  try { localStorage.setItem(key, value); } catch(e) {}
+}
+
+async function loadOrders() {
+  try {
+    const val = await storageGet(STORAGE_KEY);
+    orders = val ? JSON.parse(val) : [];
+  } catch(e) {
+    orders = [];
+  }
+  renderAll();
+}
+
+async function saveOrders() {
+  try {
+    const safe = orders.map(function(o) {
+      const s = {};
+      for (const k in o) {
+        if (typeof o[k] === 'string') {
+          s[k] = o[k].replace(/[\x00-\x1f\x7f]/g, ' ');
+        } else {
+          s[k] = o[k];
+        }
+      }
+      return s;
+    });
+    const json = JSON.stringify(safe);
+    JSON.parse(json);
+    await storageSet(STORAGE_KEY, json);
+  } catch(e) {
+    console.error('Save failed', e);
+  }
+}
+
+// Tabs
+function switchTab(tab) {
+  document.querySelectorAll('.tab-content').forEach(function(el) { el.classList.remove('active'); });
+  document.querySelectorAll('nav button').forEach(function(el) { el.classList.remove('active'); });
+  document.getElementById('tab-' + tab).classList.add('active');
+  const idx = ['scan','orders','vendors'].indexOf(tab);
+  if (idx >= 0) document.querySelectorAll('nav button')[idx].classList.add('active');
+  if (tab === 'orders') renderTable();
+  if (tab === 'vendors') renderVendors();
+}
+
+// File handling
+function handleFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  extractWithAI(file, false);
+}
+
+function handleInvoiceFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  extractWithAI(file, true);
+}
+
+async function extractWithAI(file, isInvoice) {
+  const loadingEl = isInvoice ? document.getElementById('invoiceLoading') : document.getElementById('loadingState');
+  const loadingText = document.getElementById('loadingText');
+
+  loadingEl.classList.add('visible');
+  if (!isInvoice) {
+    document.getElementById('extractedForm').classList.remove('visible');
+    if (loadingText) loadingText.textContent = 'Scanning document with AI...';
+  }
+
+  try {
+    const base64 = await fileToBase64(file);
+    const mediaType = file.type || 'image/jpeg';
+    const isPdf = file.type === 'application/pdf';
+
+    const sysInvoice = 'Extract invoice header data only. Return ONLY this JSON (no extra text, no markdown): {"invoice_number":"","invoice_date":"YYYY-MM-DD","due_date":"YYYY-MM-DD","amount_total":0,"vendor_name":"","terms":""}';
+    const sysOrder = 'Extract order header data only. Return ONLY this JSON (no extra text, no markdown): {"doc_type":"invoice","vendor_name":"","vendor_order_number":"","customer_po":"","order_date":"YYYY-MM-DD","due_date":"YYYY-MM-DD","invoice_date":"YYYY-MM-DD","invoice_number":"","amount_total":0,"customer_name":"","job_type":"glass","terms":""}. doc_type = sales_order, invoice, or purchase_order. job_type = glass or hardware. customer_po is the CUSTOMER P.O. # or Customer PO number shown on the document (this is the buyer internal reference number).';
+
+    const userContent = isPdf
+      ? [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 }, citations: { enabled: false } },
+         { type: 'text', text: 'Extract the key fields from this document.' }]
+      : [{ type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+         { type: 'text', text: 'Extract the key fields from this document.' }];
+
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      loadingEl.classList.remove('visible');
+      showToast('Please enter your Anthropic API key first');
+      if (!isInvoice) document.getElementById('extractedForm').classList.add('visible');
+      return;
+    }
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 512,
+        system: isInvoice ? sysInvoice : sysOrder,
+        messages: [{ role: 'user', content: userContent }]
+      })
+    });
+
+    const rawText = await response.text();
+    console.log('API response:', rawText.substring(0, 500));
+
+    // Parse the outer API response as JSON safely
+    // then get the text content from it
+    let extracted = null;
+    try {
+      const apiResp = JSON.parse(rawText);
+      if (apiResp.error) throw new Error(apiResp.error.message || 'API error');
+      const textContent = (apiResp.content || []).filter(function(b){ return b.type === 'text'; }).map(function(b){ return b.text; }).join('');
+      console.log('Model text:', textContent.substring(0, 300));
+      // Find the JSON object in the text content
+      const braceStart = textContent.indexOf('{');
+      if (braceStart !== -1) {
+        let depth = 0, end = -1;
+        for (let i = braceStart; i < textContent.length; i++) {
+          if (textContent[i] === '{') depth++;
+          else if (textContent[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
+        }
+        const jsonStr = end !== -1 ? textContent.substring(braceStart, end + 1) : textContent.substring(braceStart);
+        console.log('JSON str:', jsonStr.substring(0, 200));
+        extracted = JSON.parse(jsonStr);
+      }
+    } catch(parseErr) {
+      console.error('Parse error:', parseErr.message);
+      console.error('Raw was:', rawText.substring(0, 300));
+      throw parseErr;
+    }
+
+    if (!extracted) throw new Error('No JSON found in response');
+
+    loadingEl.classList.remove('visible');
+
+    if (isInvoice) {
+      applyInvoiceToOrder(extracted);
+    } else {
+      populateForm(extracted);
+    }
+  } catch(err) {
+    loadingEl.classList.remove('visible');
+    showToast('Could not parse document - please fill in manually');
+    if (!isInvoice) document.getElementById('extractedForm').classList.add('visible');
+    console.error('Extraction error:', err);
+  }
+}
+
+function fileToBase64(file) {
+  return new Promise(function(res, rej) {
+    const r = new FileReader();
+    r.onload = function() { res(r.result.split(',')[1]); };
+    r.onerror = function() { rej(new Error('Read failed')); };
+    r.readAsDataURL(file);
+  });
+}
+
+// Form population
+function populateForm(data) {
+  const g = function(full, abbr) { return data[full] || data[abbr] || ''; };
+  const vn = data.vendor_name || data.vn || '';
+  const jt = data.job_type || data.jt || '';
+  const cn = data.customer_name || data.cn || '';
+  const items = data.line_items || data.items || [];
+
+  document.getElementById('f_po').value = data.customer_po || '';
+  document.getElementById('f_vendor_wo').value = g('vendor_order_number','von');
+  document.getElementById('f_order_date').value = g('order_date','od');
+  document.getElementById('f_amount').value = data.amount_total || data.amt || '';
+  document.getElementById('f_invoice_num').value = g('invoice_number','inv');
+  document.getElementById('f_invoice_date').value = g('invoice_date','id');
+  document.getElementById('f_due_date').value = g('due_date','dd');
+
+  const vmap = { 'imperial': 'IMP', 'fhc': 'FHC', 'm3': 'M3', 'dfg': 'DFG', 'wf': 'WF', 'sky': 'Sky' };
+  if (vn) {
+    const vl = vn.toLowerCase();
+    for (const k in vmap) {
+      if (vl.indexOf(k) !== -1) { document.getElementById('f_vendor').value = vmap[k]; break; }
+    }
+  }
+
+  if (jt) {
+    const jl = jt.toLowerCase();
+    document.getElementById('f_jobtype').value = jt;
+    if (jl.indexOf('hardware') !== -1 || jl.indexOf('handle') !== -1) {
+      document.getElementById('f_material').value = 'hardware';
+    } else if (jl.indexOf('glass') !== -1 || jl.indexOf('mirror') !== -1 || jl.indexOf('shower') !== -1) {
+      document.getElementById('f_material').value = 'glass';
+    }
+  }
+
+  if (cn) document.getElementById('f_customer').value = cn;
+
+  const docType = data.doc_type || '';
+  const badge = document.getElementById('docTypeBadge');
+  if (docType === 'sales_order') {
+    badge.textContent = 'Vendor calls this an invoice - treated as Sales Order';
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
+  }
+
+  if (items.length > 0) {
+    const sec = document.getElementById('lineItemsSection');
+    const container = document.getElementById('lineItemsContainer');
+    sec.style.display = 'block';
+    container.innerHTML = items.map(function(li) {
+      return '<div class="line-item">' +
+        '<div class="field"><input type="text" value="' + escHtml(li.description || li.d || '') + '" placeholder="Description"></div>' +
+        '<div class="field"><input type="number" value="' + (li.qty || li.q || '') + '" placeholder="Qty"></div>' +
+        '<div class="field"><input type="number" value="' + (li.rate || li.r || '') + '" placeholder="Rate"></div>' +
+        '<div class="field"><input type="number" value="' + (li.amount || li.a || '') + '" placeholder="Amount"></div>' +
+        '</div>';
+    }).join('');
+  }
+
+  document.getElementById('extractedForm').classList.add('visible');
+  showToast('Document scanned - review and save');
+}
+
+function applyInvoiceToOrder(data) {
+  if (activeOrderIdx === null) return;
+  const order = orders[activeOrderIdx];
+  if (data.invoice_number || data.inv) order.invoice_num = data.invoice_number || data.inv;
+  if (data.invoice_date || data.id) order.invoice_date = data.invoice_date || data.id;
+  if (data.due_date || data.dd) order.due_date = data.due_date || data.dd;
+  if (data.amount_total || data.amt) order.amount = data.amount_total || data.amt;
+  order.status = 'open';
+  saveOrders();
+  renderAll();
+  openModal(activeOrderIdx);
+  showToast('Invoice data extracted and linked');
+}
+
+// Save order
+function saveOrder() {
+  const order = {
+    id: Date.now(),
+    po: document.getElementById('f_po').value.trim(),
+    customer: document.getElementById('f_customer').value.trim(),
+    jobtype: document.getElementById('f_jobtype').value.trim(),
+    material: document.getElementById('f_material').value,
+    vendor: document.getElementById('f_vendor').value,
+    vendor_wo: document.getElementById('f_vendor_wo').value.trim(),
+    order_date: document.getElementById('f_order_date').value,
+    completion_date: document.getElementById('f_completion_date').value,
+    amount: parseFloat(document.getElementById('f_amount').value) || 0,
+    invoice_num: document.getElementById('f_invoice_num').value.trim(),
+    invoice_date: document.getElementById('f_invoice_date').value,
+    due_date: document.getElementById('f_due_date').value,
+    status: document.getElementById('f_status').value,
+    added: new Date().toISOString()
+  };
+  orders.unshift(order);
+  saveOrders();
+  renderAll();
+  clearForm();
+  showToast('Order saved');
+  setTimeout(function() { switchTab('orders'); }, 800);
+}
+
+function clearForm() {
+  ['f_po','f_customer','f_jobtype','f_vendor_wo','f_amount','f_invoice_num'].forEach(function(id) {
+    document.getElementById(id).value = '';
+  });
+  ['f_order_date','f_invoice_date','f_due_date','f_completion_date'].forEach(function(id) {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('f_status').value = 'open';
+  document.getElementById('extractedForm').classList.remove('visible');
+  document.getElementById('lineItemsSection').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+}
+
+// Render all
+function renderAll() {
+  renderStats();
+  renderTable();
+  renderVendors();
+  renderVendorFilters();
+}
+
+function renderStats() {
+  const open = orders.filter(function(o) { return normalizeStatus(o.status) === 'open'; });
+  const today = new Date();
+  const overdue = open.filter(function(o) { return o.due_date && new Date(o.due_date) < today; });
+  document.getElementById('statTotal').textContent = orders.length;
+  document.getElementById('statOpen').textContent = open.length;
+  document.getElementById('statOpenAmt').textContent = '$' + open.reduce(function(s, o) { return s + (o.amount || 0); }, 0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+  document.getElementById('statOverdue').textContent = overdue.length;
+}
+
+function normalizeStatus(s) {
+  if (!s) return 'open';
+  return s.toLowerCase() === 'paid' ? 'paid' : 'open';
+}
+
+function renderVendorFilters() {
+  const vendors = [];
+  orders.forEach(function(o) { if (o.vendor && vendors.indexOf(o.vendor) === -1) vendors.push(o.vendor); });
+  vendors.sort();
+  const sel = document.getElementById('filterVendor');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">All Vendors</option>' + vendors.map(function(v) {
+    return '<option value="' + v + '"' + (cur === v ? ' selected' : '') + '>' + v + '</option>';
+  }).join('');
+}
+
+function renderTable() {
+  const search = (document.getElementById('searchInput').value || '').toLowerCase();
+  const fv = document.getElementById('filterVendor').value;
+  const fs = document.getElementById('filterStatus').value;
+
+  filteredOrders = orders.filter(function(o) {
+    const text = [o.po, o.customer, o.vendor, o.vendor_wo, o.invoice_num, o.jobtype].join(' ').toLowerCase();
+    if (search && text.indexOf(search) === -1) return false;
+    if (fv && o.vendor !== fv) return false;
+    if (fs && normalizeStatus(o.status) !== fs) return false;
+    return true;
+  });
+
+  const start = currentPage * PAGE_SIZE;
+  const end = Math.min(start + PAGE_SIZE, filteredOrders.length);
+  const pageOrders = filteredOrders.slice(start, end);
+  const today = new Date();
+  const tbody = document.getElementById('ordersBody');
+
+  if (filteredOrders.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="11"><div class="empty-state"><div class="icon">&#128203;</div><p>No orders found. Scan one to get started!</p></div></td></tr>';
+  } else {
+    tbody.innerHTML = pageOrders.map(function(o) {
+      const idx = orders.indexOf(o);
+      const status = normalizeStatus(o.status);
+      const isOverdue = status === 'open' && o.due_date && new Date(o.due_date) < today;
+      const dueFmt = o.due_date ? new Date(o.due_date + 'T00:00:00').toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'}) : '-';
+      const orderFmt = o.order_date ? new Date(o.order_date + 'T00:00:00').toLocaleDateString('en-US', {month:'short',day:'numeric'}) : '-';
+      const completionFmt = o.completion_date ? new Date(o.completion_date + 'T00:00:00').toLocaleDateString('en-US', {month:'short',day:'numeric'}) : '-';
+      const amt = o.amount ? '$' + parseFloat(o.amount).toLocaleString('en-US', {minimumFractionDigits:2}) : '-';
+      return '<tr onclick="openModal(' + idx + ')">' +
+        '<td style="font-family:\'DM Mono\',monospace;font-size:12px">' + escHtml(o.po || '-') + '</td>' +
+        '<td>' + escHtml(o.customer || '-') + '</td>' +
+        '<td style="color:var(--muted)">' + escHtml(o.jobtype || '-') + '</td>' +
+        '<td><span style="font-family:\'DM Mono\',monospace;font-size:12px;background:var(--surface2);padding:2px 7px;border-radius:4px">' + escHtml(o.vendor || '-') + '</span></td>' +
+        '<td style="font-family:\'DM Mono\',monospace;font-size:12px;color:var(--muted)">' + escHtml(o.vendor_wo || '-') + '</td>' +
+        '<td style="color:var(--muted)">' + orderFmt + '</td>' +
+        '<td style="color:var(--muted)">' + completionFmt + '</td>' +
+        '<td style="font-weight:500">' + amt + '</td>' +
+        '<td style="font-family:\'DM Mono\',monospace;font-size:12px;color:var(--muted)">' + escHtml(o.invoice_num || '-') + '</td>' +
+        '<td style="color:' + (isOverdue ? 'var(--accent2)' : 'var(--muted)') + '">' + dueFmt + '</td>' +
+        '<td><span class="status-pill status-' + status + '">' + status + '</span></td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  document.getElementById('pageInfo').textContent = filteredOrders.length === 0 ? 'No results' : 'Showing ' + (start+1) + '-' + end + ' of ' + filteredOrders.length;
+  document.getElementById('prevBtn').disabled = currentPage === 0;
+  document.getElementById('nextBtn').disabled = end >= filteredOrders.length;
+}
+
+function changePage(dir) {
+  currentPage += dir;
+  renderTable();
+}
+
+// Vendor reports
+function renderVendors() {
+  const vendors = [];
+  orders.forEach(function(o) { if (o.vendor && vendors.indexOf(o.vendor) === -1) vendors.push(o.vendor); });
+  vendors.sort();
+  const today = new Date();
+  const grid = document.getElementById('vendorGrid');
+
+  if (vendors.length === 0) {
+    grid.innerHTML = '<div class="empty-state"><div class="icon">&#127981;</div><p>No vendor data yet. Scan an order first.</p></div>';
+    return;
+  }
+
+  grid.innerHTML = vendors.map(function(v) {
+    const vOrders = orders.filter(function(o) { return o.vendor === v; });
+    const open = vOrders.filter(function(o) { return normalizeStatus(o.status) === 'open'; });
+    const paid = vOrders.filter(function(o) { return normalizeStatus(o.status) === 'paid'; });
+    const openAmt = open.reduce(function(s, o) { return s + (o.amount || 0); }, 0);
+    const dueItems = open.filter(function(o) { return o.due_date; })
+      .sort(function(a, b) { return new Date(a.due_date) - new Date(b.due_date); })
+      .slice(0, 4);
+
+    const dueRows = dueItems.length === 0
+      ? '<div style="color:var(--muted);font-size:12px;padding:8px 0">No invoices with due dates</div>'
+      : dueItems.map(function(o) {
+          const d = new Date(o.due_date + 'T00:00:00');
+          const diff = Math.round((d - today) / 86400000);
+          const cls = diff < 0 ? 'overdue' : diff <= 7 ? 'soon' : 'ok';
+          const label = diff < 0 ? (Math.abs(diff) + 'd overdue') : diff === 0 ? 'Due today' : (diff + 'd');
+          return '<div class="due-item"><span>' + escHtml(o.po || o.vendor_wo || '-') + ' - ' + escHtml((o.customer || '').substring(0,20)) + '</span>' +
+            '<span class="due-date ' + cls + '">' + d.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' (' + label + ')</span></div>';
+        }).join('');
+
+    return '<div class="vendor-card">' +
+      '<div class="vendor-card-header"><div class="vendor-name">' + escHtml(v) + '</div><div class="vendor-tag">' + vOrders.length + ' orders</div></div>' +
+      '<div class="vendor-stats">' +
+        '<div class="vstat"><label>Open Balance</label><div class="num orange">$' + openAmt.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</div></div>' +
+        '<div class="vstat"><label>Open Orders</label><div class="num orange">' + open.length + '</div></div>' +
+        '<div class="vstat"><label>Paid Orders</label><div class="num green">' + paid.length + '</div></div>' +
+        '<div class="vstat"><label>Total Volume</label><div class="num">$' + vOrders.reduce(function(s,o){return s+(o.amount||0);},0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</div></div>' +
+      '</div>' +
+      '<div class="vendor-due-list"><h4>Upcoming / Overdue</h4>' + dueRows + '</div>' +
+      '</div>';
+  }).join('');
+}
+
+// Modal
+function openModal(idx) {
+  activeOrderIdx = idx;
+  const o = orders[idx];
+  const status = normalizeStatus(o.status);
+
+  document.getElementById('modalTitle').textContent = (o.po || 'Order') + ' - ' + (o.customer || '');
+  document.getElementById('modalSub').textContent = (o.vendor || '') + ' - ' + (o.jobtype || '') + ' - ' + (o.material || '');
+
+  document.getElementById('modalOrderInfo').innerHTML =
+    '<div class="modal-row"><span>EG PO</span><input class="modal-input" id="me_po" value="' + escHtml(o.po||'') + '"></div>' +
+    '<div class="modal-row"><span>Customer</span><input class="modal-input" id="me_customer" value="' + escHtml(o.customer||'') + '"></div>' +
+    '<div class="modal-row"><span>Job Type</span><input class="modal-input" id="me_jobtype" value="' + escHtml(o.jobtype||'') + '"></div>' +
+    '<div class="modal-row"><span>Material</span><select class="modal-input" id="me_material">' +
+      ['glass','hardware','kit'].map(function(v) { return '<option' + (o.material===v?' selected':'') + '>' + v + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="modal-row"><span>Vendor</span><select class="modal-input" id="me_vendor">' +
+      ['IMP','FHC','M3','DFG','WF','Sky','SKY'].map(function(v) { return '<option' + (o.vendor===v?' selected':'') + '>' + v + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="modal-row"><span>Vendor WO #</span><input class="modal-input" id="me_vendor_wo" value="' + escHtml(o.vendor_wo||'') + '"></div>' +
+    '<div class="modal-row"><span>Order Date</span><input class="modal-input" type="date" id="me_order_date" value="' + (o.order_date||'') + '"></div>' +
+    '<div class="modal-row"><span>Completion Date</span><input class="modal-input" type="date" id="me_completion_date" value="' + (o.completion_date||'') + '"></div>' +
+    '<div class="modal-row"><span>Amount ($)</span><input class="modal-input" type="number" id="me_amount" value="' + (o.amount||'') + '"></div>' +
+    '<div class="modal-row"><span>Status</span><select class="modal-input" id="me_status">' +
+      '<option value="open"' + (normalizeStatus(o.status)==='open'?' selected':'') + '>open</option>' +
+      '<option value="paid"' + (normalizeStatus(o.status)==='paid'?' selected':'') + '>paid</option>' +
+    '</select></div>';
+
+  document.getElementById('modalInvoiceInfo').innerHTML =
+    '<div class="modal-row"><span>Invoice #</span><input class="modal-input" id="me_invoice_num" value="' + escHtml(o.invoice_num||'') + '"></div>' +
+    '<div class="modal-row"><span>Invoice Date</span><input class="modal-input" type="date" id="me_invoice_date" value="' + (o.invoice_date||'') + '"></div>' +
+    '<div class="modal-row"><span>Due Date</span><input class="modal-input" type="date" id="me_due_date" value="' + (o.due_date||'') + '"></div>';
+
+  document.getElementById('invoiceLoading').classList.remove('visible');
+  document.getElementById('invoiceFileInput').value = '';
+  document.getElementById('modalOverlay').classList.add('open');
+}
+
+function closeModal(e, force) {
+  if (force || (e && e.target === document.getElementById('modalOverlay'))) {
+    document.getElementById('modalOverlay').classList.remove('open');
+    activeOrderIdx = null;
+  }
+}
+
+function markPaid() {
+  if (activeOrderIdx === null) return;
+  orders[activeOrderIdx].status = 'paid';
+  const statusEl = document.getElementById('me_status');
+  if (statusEl) statusEl.value = 'paid';
+  saveOrders();
+  renderAll();
+  closeModal(null, true);
+  showToast('Marked as paid');
+}
+
+function deleteOrder() {
+  if (activeOrderIdx === null) return;
+  if (!confirm('Delete this order?')) return;
+  orders.splice(activeOrderIdx, 1);
+  saveOrders();
+  renderAll();
+  closeModal(null, true);
+  showToast('Order deleted');
+}
+
+function saveModalChanges() {
+  if (activeOrderIdx === null) return;
+  const o = orders[activeOrderIdx];
+  o.po = document.getElementById('me_po').value.trim();
+  o.customer = document.getElementById('me_customer').value.trim();
+  o.jobtype = document.getElementById('me_jobtype').value.trim();
+  o.material = document.getElementById('me_material').value;
+  o.vendor = document.getElementById('me_vendor').value;
+  o.vendor_wo = document.getElementById('me_vendor_wo').value.trim();
+  o.order_date = document.getElementById('me_order_date').value;
+  o.completion_date = document.getElementById('me_completion_date').value;
+  o.amount = parseFloat(document.getElementById('me_amount').value) || 0;
+  o.status = document.getElementById('me_status').value;
+  o.invoice_num = document.getElementById('me_invoice_num').value.trim();
+  o.invoice_date = document.getElementById('me_invoice_date').value;
+  o.due_date = document.getElementById('me_due_date').value;
+  saveOrders();
+  renderAll();
+  closeModal(null, true);
+  showToast('Changes saved');
+}
+
+// Export to Excel/CSV
+function exportToExcel() {
+  const headers = ['EG PO','Customer/Site','Job Type','Material','Vendor','Vendor WO','Order Date','Completion Date','Amount','Invoice #','Invoice Date','Due Date','Status'];
+  const rows = (filteredOrders.length > 0 ? filteredOrders : orders).map(function(o) {
+    return [o.po||'',o.customer||'',o.jobtype||'',o.material||'',o.vendor||'',o.vendor_wo||'',
+            o.order_date||'',o.completion_date||'',o.amount||'',o.invoice_num||'',
+            o.invoice_date||'',o.due_date||'',normalizeStatus(o.status)];
+  });
+  const csv = [headers].concat(rows).map(function(r) {
+    return r.map(function(v) { return '"' + String(v).replace(/"/g,'""') + '"'; }).join(',');
+  }).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'eridion-orders-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Exported - open in Excel');
+}
+
+// Email report
+function showEmailReport() {
+  const today = new Date();
+  const in14 = new Date(today);
+  in14.setDate(today.getDate() + 14);
+  const open = orders.filter(function(o) { return normalizeStatus(o.status) === 'open'; });
+  const overdue = open.filter(function(o) { return o.due_date && new Date(o.due_date+'T00:00:00') < today; });
+  const soon = open.filter(function(o) { return o.due_date && new Date(o.due_date+'T00:00:00') >= today && new Date(o.due_date+'T00:00:00') <= in14; });
+
+  let body = 'ERIDION GLASS - PAYMENT DUE REPORT\n' + today.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'}) + '\n';
+  body += '--------------------------------------------------\n\n';
+
+  if (overdue.length > 0) {
+    body += 'OVERDUE (' + overdue.length + ' orders)\n------------------------------\n';
+    overdue.sort(function(a,b){return new Date(a.due_date)-new Date(b.due_date);}).forEach(function(o) {
+      const days = Math.round((today - new Date(o.due_date+'T00:00:00')) / 86400000);
+      body += '  ' + (o.po||'-').padEnd(12) + ' ' + (o.vendor||'').padEnd(6) + ' $' + (o.amount||0).toFixed(2) + '  [' + days + 'd overdue]\n';
+    });
+    body += '\n';
+  }
+
+  if (soon.length > 0) {
+    body += 'DUE IN 14 DAYS (' + soon.length + ' orders)\n------------------------------\n';
+    soon.sort(function(a,b){return new Date(a.due_date)-new Date(b.due_date);}).forEach(function(o) {
+      const d = new Date(o.due_date+'T00:00:00');
+      const days = Math.round((d - today) / 86400000);
+      body += '  ' + (o.po||'-').padEnd(12) + ' ' + (o.vendor||'').padEnd(6) + ' $' + (o.amount||0).toFixed(2) + '  Due ' + d.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' (' + days + 'd)\n';
+    });
+    body += '\n';
+  }
+
+  const totalOwed = open.reduce(function(s,o){return s+(o.amount||0);},0);
+  body += '--------------------------------------------------\n';
+  body += 'TOTAL OPEN: ' + open.length + ' orders  |  $' + totalOwed.toLocaleString('en-US',{minimumFractionDigits:2}) + '\n';
+
+  document.getElementById('emailPreview').textContent = body;
+  document.getElementById('emailModalOverlay').classList.add('open');
+  document.getElementById('emailLoading').classList.remove('visible');
+}
+
+function closeEmailModal(e, force) {
+  if (force || (e && e.target === document.getElementById('emailModalOverlay'))) {
+    document.getElementById('emailModalOverlay').classList.remove('open');
+  }
+}
+
+async function sendEmailReport() {
+  const to = document.getElementById('emailTo').value.trim();
+  if (!to) { showToast('Please enter your email address'); return; }
+  const body = document.getElementById('emailPreview').textContent;
+  const today = new Date();
+  const subject = 'Eridion Glass - Payment Due Report ' + today.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  document.getElementById('emailLoading').classList.add('visible');
+  try {
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      loadingEl.classList.remove('visible');
+      showToast('Please enter your Anthropic API key first');
+      if (!isInvoice) document.getElementById('extractedForm').classList.add('visible');
+      return;
+    }
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: 'You are a helpful assistant that sends emails using Gmail MCP tools.',
+        messages: [{ role: 'user', content: 'Please send an email to ' + to + ' with subject "' + subject + '" and this body:\n\n' + body }],
+        mcp_servers: [{ type: 'url', url: 'https://gmail.mcp.claude.com/mcp', name: 'gmail-mcp' }]
+      })
+    });
+    const data = await response.json();
+    document.getElementById('emailLoading').classList.remove('visible');
+    const usedTool = data.content && data.content.some(function(b) { return b.type === 'mcp_tool_use' || b.type === 'tool_use'; });
+    const textReply = data.content ? data.content.filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('') : '';
+    if (usedTool || textReply.toLowerCase().indexOf('sent') !== -1) {
+      closeEmailModal(null, true);
+      showToast('Report sent to ' + to);
+    } else {
+      showToast('Gmail not connected - connect it in Claude settings');
+    }
+  } catch(err) {
+    document.getElementById('emailLoading').classList.remove('visible');
+    showToast('Could not send email');
+    console.error(err);
+  }
+}
+
+// Drive sync
+async function syncToDrive() {
+  showToast('Syncing to Google Drive...');
+  try {
+    const exportData = JSON.stringify(orders, null, 2);
+    const today = new Date().toISOString().slice(0,10);
+    const filename = 'eridion-orders-backup-' + today + '.json';
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      loadingEl.classList.remove('visible');
+      showToast('Please enter your Anthropic API key first');
+      if (!isInvoice) document.getElementById('extractedForm').classList.add('visible');
+      return;
+    }
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: 'You help sync data to Google Drive.',
+        messages: [{ role: 'user', content: 'Save my order data as "' + filename + '" in Google Drive:\n\n' + exportData.substring(0,8000) }],
+        mcp_servers: [{ type: 'url', url: 'https://gdrive.mcp.claude.com/mcp', name: 'gdrive-mcp' }]
+      })
+    });
+    const data = await response.json();
+    const usedTool = data.content && data.content.some(function(b) { return b.type === 'mcp_tool_use' || b.type === 'tool_use'; });
+    if (usedTool) {
+      showToast('Backed up to Google Drive');
+    } else {
+      showToast('Google Drive not connected - connect it in Claude settings');
+    }
+  } catch(err) {
+    showToast('Drive sync failed');
+    console.error(err);
+  }
+}
+
+// Import / Export
+function showImportExport() {
+  document.getElementById('exportData').value = '';
+  document.getElementById('importData').value = '';
+  document.getElementById('importExportOverlay').classList.add('open');
+}
+
+function closeImportExport(e, force) {
+  if (force || (e && e.target === document.getElementById('importExportOverlay'))) {
+    document.getElementById('importExportOverlay').classList.remove('open');
+  }
+}
+
+function generateExport() {
+  const json = JSON.stringify(orders, null, 2);
+  document.getElementById('exportData').value = json;
+  showToast('Export ready - copy and save it');
+}
+
+function copyExport() {
+  const ta = document.getElementById('exportData');
+  if (!ta.value) { showToast('Click Generate Export first'); return; }
+  navigator.clipboard.writeText(ta.value).then(function() {
+    showToast('Copied to clipboard!');
+  }).catch(function() {
+    ta.select();
+    document.execCommand('copy');
+    showToast('Copied!');
+  });
+}
+
+function doImport() {
+  const raw = document.getElementById('importData').value.trim();
+  if (!raw) { showToast('Paste your exported data first'); return; }
+
+  let parsed = null;
+
+  // Try JSON first
+  try {
+    parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) parsed = null;
+  } catch(e) {}
+
+  // Try CSV if JSON failed
+  if (!parsed) {
+    try {
+      const lines = raw.replace(/\r/g,'').split(String.fromCharCode(10)).filter(function(l) { return l.trim(); });
+      if (lines.length < 2) throw new Error('Not enough rows');
+      // Parse CSV header
+      const headers = lines[0].split(',').map(function(h) { return h.replace(/^"|"$/g,'').trim(); });
+      parsed = [];
+      for (let i = 1; i < lines.length; i++) {
+        // Handle quoted CSV fields
+        const fields = [];
+        let cur = '', inQ = false;
+        for (let j = 0; j < lines[i].length; j++) {
+          const ch = lines[i][j];
+          if (ch === '"') { inQ = !inQ; }
+          else if (ch === ',' && !inQ) { fields.push(cur); cur = ''; }
+          else { cur += ch; }
+        }
+        fields.push(cur);
+        const row = {};
+        // Map CSV columns to order fields
+        const colMap = {
+          'EG PO': 'po', 'Customer/Site': 'customer', 'Job Type': 'jobtype',
+          'Material': 'material', 'Vendor': 'vendor', 'Vendor WO': 'vendor_wo',
+          'Order Date': 'order_date', 'Completion Date': 'completion_date',
+          'Amount': 'amount', 'Invoice #': 'invoice_num', 'Invoice Date': 'invoice_date',
+          'Due Date': 'due_date', 'Status': 'status'
+        };
+        headers.forEach(function(h, idx) {
+          const field = colMap[h];
+          if (field && fields[idx] !== undefined) {
+            const val = fields[idx].replace(/^"|"$/g,'').trim();
+            row[field] = field === 'amount' ? (parseFloat(val) || 0) : val;
+          }
+        });
+        row.id = Date.now() + i;
+        if (row.po || row.customer || row.vendor) parsed.push(row);
+      }
+    } catch(e) {
+      showToast('Invalid data - paste JSON export or CSV export');
+      console.error(e);
+      return;
+    }
+  }
+
+  if (!parsed || parsed.length === 0) {
+    showToast('No valid orders found in pasted data');
+    return;
+  }
+
+  if (!confirm('Import ' + parsed.length + ' orders? This will replace all current data.')) return;
+  orders = parsed;
+  saveOrders();
+  renderAll();
+  closeImportExport(null, true);
+  showToast('Imported ' + orders.length + ' orders successfully!');
+}
+
+// Clear all data
+function clearAllData() {
+  if (!confirm('This will delete ALL saved orders. Are you sure?')) return;
+  try { localStorage.removeItem('eridion_orders_v2'); } catch(e) {}
+  try { if (window.storage) window.storage.delete('eridion_orders_v2'); } catch(e) {}
+  orders = [];
+  saveOrders();
+  renderAll();
+  showToast('All data cleared');
+}
+
+// Helpers
+function fmtDate(d) {
+  if (!d) return '-';
+  try { return new Date(d + 'T00:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}); }
+  catch(e) { return d; }
+}
+
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function() { t.classList.remove('show'); }, 2800);
+}
+
+// API Key management
+function saveApiKey() {
+  const key = document.getElementById('apiKeyInput').value.trim();
+  if (!key || !key.startsWith('sk-ant-')) {
+    document.getElementById('apiKeyStatus').textContent = 'Invalid key - must start with sk-ant-';
+    document.getElementById('apiKeyStatus').style.color = 'var(--accent2)';
+    return;
+  }
+  try { localStorage.setItem('eridion_api_key', key); } catch(e) {}
+  document.getElementById('apiKeyInput').value = '';
+  document.getElementById('apiKeyStatus').textContent = 'Key saved! You can now scan documents.';
+  document.getElementById('apiKeyStatus').style.color = 'var(--accent)';
+}
+
+function getApiKey() {
+  try { return localStorage.getItem('eridion_api_key') || ''; } catch(e) { return ''; }
+}
+
+// Drag and drop
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('dragging'); });
+dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('dragging'); });
+dropZone.addEventListener('drop', function(e) {
+  e.preventDefault();
+  dropZone.classList.remove('dragging');
+  const file = e.dataTransfer.files[0];
+  if (file) extractWithAI(file, false);
+});
+
+// Init
+(function loadSavedKey() {
+  try {
+    const saved = localStorage.getItem('eridion_api_key');
+    if (saved) {
+      document.getElementById('apiKeyStatus').textContent = 'API key loaded from storage.';
+      document.getElementById('apiKeyStatus').style.color = 'var(--accent)';
+    }
+  } catch(e) {}
+})();
+loadOrders();
+</script>
+</body>
+</html>
