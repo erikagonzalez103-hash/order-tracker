@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -15,6 +15,7 @@
     --accent: #4fffb0;
     --accent2: #ff6b4a;
     --accent3: #4a9eff;
+    --accent4: #c084fc;
     --text: #e8eaf0;
     --muted: #6b7280;
     --warn: #fbbf24;
@@ -32,7 +33,6 @@
     flex-direction: column;
   }
 
-  /* HEADER */
   header {
     display: flex;
     align-items: center;
@@ -51,9 +51,8 @@
     font-size: 18px;
     letter-spacing: -0.5px;
   }
-  .logo span { color: var(--accent); }
 
-  nav { display: flex; gap: 6px; }
+  nav { display: flex; gap: 6px; flex-wrap: wrap; }
   nav button {
     background: none;
     border: 1px solid transparent;
@@ -69,10 +68,8 @@
   nav button:hover { color: var(--text); border-color: var(--border); }
   nav button.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 500; }
 
-  /* LAYOUT */
   main { flex: 1; padding: 28px 32px; max-width: 1400px; width: 100%; margin: 0 auto; }
 
-  /* SCAN PANEL */
   .scan-panel {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -114,7 +111,6 @@
   .drop-zone h3 { font-family: 'Syne', sans-serif; font-size: 15px; margin-bottom: 4px; }
   .drop-zone p { margin: 0; font-size: 12px; }
 
-  /* FORM */
   .extracted-form {
     display: none;
     margin-top: 20px;
@@ -143,6 +139,7 @@
     letter-spacing: 0.5px;
   }
   .badge.warn { background: rgba(251, 191, 36, 0.15); color: var(--warn); }
+  .badge.purple { background: rgba(192, 132, 252, 0.15); color: var(--accent4); }
 
   .form-grid {
     display: grid;
@@ -208,8 +205,9 @@
   .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
   .btn-danger { background: rgba(255, 107, 74, 0.15); color: var(--accent2); border: 1px solid rgba(255,107,74,0.3); }
   .btn-danger:hover { background: rgba(255, 107, 74, 0.25); }
+  .btn-purple { background: rgba(192,132,252,0.15); color: var(--accent4); border: 1px solid rgba(192,132,252,0.3); }
+  .btn-purple:hover { background: rgba(192,132,252,0.25); }
 
-  /* LOADING */
   .loading {
     display: none;
     align-items: center;
@@ -229,7 +227,6 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* STATS BAR */
   .stats-bar {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -260,7 +257,6 @@
   .stat-card .value.orange { color: var(--accent2); }
   .stat-card .value.blue { color: var(--accent3); }
 
-  /* TABLE */
   .table-container {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -274,6 +270,8 @@
     justify-content: space-between;
     padding: 16px 20px;
     border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    gap: 10px;
   }
   .table-header h2 {
     font-family: 'Syne', sans-serif;
@@ -285,6 +283,7 @@
     display: flex;
     gap: 8px;
     align-items: center;
+    flex-wrap: wrap;
   }
   .filters input, .filters select {
     background: var(--bg);
@@ -340,7 +339,17 @@
   .status-open { background: rgba(255,107,74,0.12); color: var(--accent2); }
   .status-pending { background: rgba(251,191,36,0.12); color: var(--warn); }
 
-  /* VENDOR REPORT */
+  .division-pill {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.3px;
+  }
+  .division-residential { background: rgba(74,158,255,0.12); color: var(--accent3); }
+  .division-commercial { background: rgba(192,132,252,0.12); color: var(--accent4); }
+
   .vendor-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -424,7 +433,6 @@
   .due-item .soon { color: var(--warn); }
   .due-item .ok { color: var(--muted); }
 
-  /* DETAIL MODAL */
   .modal-overlay {
     display: none;
     position: fixed;
@@ -486,9 +494,8 @@
   }
   .modal-input:focus { border-color: var(--accent); background: var(--bg); }
   select.modal-input { cursor: pointer; }
-  .modal-actions { display: flex; gap: 8px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border); }
+  .modal-actions { display: flex; gap: 8px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border); flex-wrap: wrap; }
 
-  /* INVOICE UPLOAD IN MODAL */
   .invoice-section {
     background: var(--bg);
     border: 1px solid var(--border);
@@ -517,6 +524,87 @@
   }
   .invoice-drop:hover { border-color: var(--accent3); color: var(--accent3); }
   .invoice-drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+
+  /* SG IMPORT MODAL */
+  .sg-drop-zone {
+    border: 2px dashed var(--accent4);
+    border-radius: 10px;
+    padding: 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: rgba(192,132,252,0.04);
+    position: relative;
+    margin-bottom: 16px;
+  }
+  .sg-drop-zone:hover, .sg-drop-zone.dragging {
+    background: rgba(192,132,252,0.1);
+  }
+  .sg-drop-zone input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+
+  .sg-preview {
+    display: none;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .sg-preview.visible { display: block; }
+  .sg-preview-header {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .sg-preview-header span { color: var(--accent4); font-size: 13px; }
+  .sg-preview-body {
+    max-height: 280px;
+    overflow-y: auto;
+  }
+  .sg-preview-row {
+    display: grid;
+    grid-template-columns: 100px 60px 1fr 90px 80px;
+    gap: 8px;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    align-items: center;
+  }
+  .sg-preview-row:last-child { border-bottom: none; }
+  .sg-preview-row.header {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+  }
+  .sg-preview-row .vendor-tag-sm {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    background: var(--surface2);
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: var(--muted);
+    display: inline-block;
+  }
+  .sg-dupe { opacity: 0.4; }
+  .sg-dupe-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--warn);
+    background: rgba(251,191,36,0.1);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
 
   .toast {
     position: fixed;
@@ -576,6 +664,16 @@
   }
   .page-btn:hover { border-color: var(--accent); color: var(--accent); }
   .page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .items-outstanding {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 4px;
+  }
+  .items-received { background: rgba(79,255,176,0.1); color: var(--accent); }
+  .items-partial { background: rgba(251,191,36,0.1); color: var(--warn); }
+  .items-pending { background: rgba(255,107,74,0.1); color: var(--accent2); }
 </style>
 </head>
 <body>
@@ -586,6 +684,7 @@
     <button class="active" onclick="switchTab('scan')">+ Scan Order</button>
     <button onclick="switchTab('orders')">All Orders</button>
     <button onclick="switchTab('vendors')">Vendor Reports</button>
+    <button onclick="showSGImport()" style="background:rgba(192,132,252,0.1);color:var(--accent4);border-color:rgba(192,132,252,0.3)">⬆ SG Import</button>
     <button onclick="syncToDrive()" style="background:rgba(74,158,255,0.1);color:var(--accent3);border-color:rgba(74,158,255,0.3)">☁ Drive Sync</button>
     <button onclick="showImportExport()" style="background:rgba(79,255,176,0.1);color:var(--accent);border-color:rgba(79,255,176,0.3)">⇅ Import/Export</button>
     <button onclick="clearAllData()" style="background:rgba(255,107,74,0.1);color:var(--accent2);border-color:rgba(255,107,74,0.3)" title="Use if app won't load">⚠ Reset</button>
@@ -637,8 +736,19 @@
             <input type="text" id="f_po" placeholder="e.g. 23500-1">
           </div>
           <div class="field">
-            <label>Customer / Site</label>
-            <input type="text" id="f_customer" placeholder="Builder - Address">
+            <label>Customer</label>
+            <input type="text" id="f_customer" placeholder="Builder name">
+          </div>
+          <div class="field">
+            <label>Job Address</label>
+            <input type="text" id="f_address" placeholder="123 Main St">
+          </div>
+          <div class="field">
+            <label>Division</label>
+            <select id="f_division">
+              <option value="Residential">Residential</option>
+              <option value="Commercial">Commercial</option>
+            </select>
           </div>
           <div class="field">
             <label>Job Type</label>
@@ -649,7 +759,6 @@
             <select id="f_material">
               <option>glass</option>
               <option>hardware</option>
-              <option>Hardware</option>
               <option>kit</option>
             </select>
           </div>
@@ -671,6 +780,10 @@
           <div class="field">
             <label>Order Date</label>
             <input type="date" id="f_order_date">
+          </div>
+          <div class="field">
+            <label>Expected Delivery</label>
+            <input type="date" id="f_expected_date">
           </div>
           <div class="field">
             <label>Amount ($)</label>
@@ -751,7 +864,12 @@
             <option value="open">Open</option>
             <option value="paid">Paid</option>
           </select>
-          <button class="btn btn-secondary" onclick="exportToExcel()" style="white-space:nowrap">⬇ Export Excel</button>
+          <select id="filterDivision" onchange="renderTable()">
+            <option value="">All Divisions</option>
+            <option value="Residential">Residential</option>
+            <option value="Commercial">Commercial</option>
+          </select>
+          <button class="btn btn-secondary" onclick="exportToExcel()" style="white-space:nowrap">⬇ Export CSV</button>
           <button class="btn btn-secondary" onclick="showEmailReport()" style="white-space:nowrap">✉ Email Report</button>
         </div>
       </div>
@@ -760,15 +878,16 @@
           <thead>
             <tr>
               <th>EG PO</th>
-              <th>Customer / Site</th>
-              <th>Type</th>
+              <th>Customer</th>
+              <th>Address</th>
+              <th>Division</th>
               <th>Vendor</th>
-              <th>Vendor WO</th>
               <th>Order Date</th>
-              <th>Completion</th>
+              <th>Expected</th>
               <th>Amount</th>
               <th>Invoice #</th>
               <th>Due Date</th>
+              <th>Material</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -826,6 +945,50 @@
       <button class="btn btn-secondary" onclick="saveModalChanges()">Save Changes</button>
       <button class="btn btn-danger" onclick="deleteOrder()">Delete</button>
       <button class="btn btn-secondary" onclick="closeModal(null, true)" style="margin-left:auto">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- SG IMPORT MODAL -->
+<div class="modal-overlay" id="sgModalOverlay" onclick="closeSGModal(event)">
+  <div class="modal" style="width:680px;max-width:95vw;">
+    <div class="modal-title">⬆ Smart Glazier Import</div>
+    <div class="modal-sub">Drop your SG Purchase Orders CSV export to bulk-create orders. Duplicates are automatically skipped.</div>
+
+    <div class="sg-drop-zone" id="sgDropZone">
+      <input type="file" id="sgFileInput" accept=".csv" onchange="handleSGFile(event)">
+      <div style="font-size:28px;margin-bottom:10px;">📊</div>
+      <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:4px;color:var(--accent4)">Drop SG CSV here or click to browse</div>
+      <div style="font-size:12px;color:var(--muted)">Export from Smart Glazier → Reports → Purchase Orders → Default</div>
+    </div>
+
+    <div class="sg-preview" id="sgPreview">
+      <div class="sg-preview-header">
+        <span id="sgPreviewCount">0 orders found</span>
+        <span id="sgPreviewDupes" style="color:var(--warn);font-size:11px;"></span>
+      </div>
+      <div class="sg-preview-body">
+        <div class="sg-preview-row header">
+          <div>PO #</div>
+          <div>Vendor</div>
+          <div>Customer / Address</div>
+          <div>Amount</div>
+          <div>Status</div>
+        </div>
+        <div id="sgPreviewRows"></div>
+      </div>
+    </div>
+
+    <div class="loading" id="sgLoading">
+      <div class="spinner"></div>
+      <span>Parsing Smart Glazier export...</span>
+    </div>
+
+    <div id="sgImportSummary" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:16px;font-size:13px;"></div>
+
+    <div class="modal-actions">
+      <button class="btn btn-purple" id="sgImportBtn" onclick="doSGImport()" style="display:none">Import Orders</button>
+      <button class="btn btn-secondary" onclick="closeSGModal(null,true)" style="margin-left:auto">Cancel</button>
     </div>
   </div>
 </div>
@@ -897,8 +1060,9 @@ let currentPage = 0;
 const PAGE_SIZE = 25;
 let activeOrderIdx = null;
 let filteredOrders = [];
+let sgParsedOrders = [];
 
-// Storage - works in Claude.ai and as local file
+// Storage
 async function storageGet(key) {
   try {
     if (window.storage && typeof window.storage.get === 'function') {
@@ -923,9 +1087,7 @@ async function loadOrders() {
   try {
     const val = await storageGet(STORAGE_KEY);
     orders = val ? JSON.parse(val) : [];
-  } catch(e) {
-    orders = [];
-  }
+  } catch(e) { orders = []; }
   renderAll();
 }
 
@@ -934,20 +1096,15 @@ async function saveOrders() {
     const safe = orders.map(function(o) {
       const s = {};
       for (const k in o) {
-        if (typeof o[k] === 'string') {
-          s[k] = o[k].replace(/[\x00-\x1f\x7f]/g, ' ');
-        } else {
-          s[k] = o[k];
-        }
+        if (typeof o[k] === 'string') s[k] = o[k].replace(/[\x00-\x1f\x7f]/g, ' ');
+        else s[k] = o[k];
       }
       return s;
     });
     const json = JSON.stringify(safe);
     JSON.parse(json);
     await storageSet(STORAGE_KEY, json);
-  } catch(e) {
-    console.error('Save failed', e);
-  }
+  } catch(e) { console.error('Save failed', e); }
 }
 
 // Tabs
@@ -990,7 +1147,7 @@ async function extractWithAI(file, isInvoice) {
     const isPdf = file.type === 'application/pdf';
 
     const sysInvoice = 'Extract invoice header data only. Return ONLY this JSON (no extra text, no markdown): {"invoice_number":"","invoice_date":"YYYY-MM-DD","due_date":"YYYY-MM-DD","amount_total":0,"vendor_name":"","terms":""}';
-    const sysOrder = 'Extract order header data only. Return ONLY this JSON (no extra text, no markdown): {"doc_type":"invoice","vendor_name":"","vendor_order_number":"","customer_po":"","order_date":"YYYY-MM-DD","due_date":"YYYY-MM-DD","invoice_date":"YYYY-MM-DD","invoice_number":"","amount_total":0,"customer_name":"","job_type":"glass","terms":""}. doc_type = sales_order, invoice, or purchase_order. job_type = glass or hardware. customer_po is the CUSTOMER P.O. # or Customer PO number shown on the document (this is the buyer internal reference number).';
+    const sysOrder = 'Extract order header data only. Return ONLY this JSON (no extra text, no markdown): {"doc_type":"invoice","vendor_name":"","vendor_order_number":"","customer_po":"","order_date":"YYYY-MM-DD","expected_date":"YYYY-MM-DD","due_date":"YYYY-MM-DD","invoice_date":"YYYY-MM-DD","invoice_number":"","amount_total":0,"customer_name":"","job_address":"","job_type":"glass","division":"Residential","terms":""}. doc_type = sales_order, invoice, or purchase_order. job_type = glass or hardware. division = Residential or Commercial. customer_po is the CUSTOMER P.O. # shown on the document. job_address is the street address of the job site if visible.';
 
     const userContent = isPdf
       ? [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 }, citations: { enabled: false } },
@@ -1012,15 +1169,11 @@ async function extractWithAI(file, isInvoice) {
     const rawText = await response.text();
     console.log('API response:', rawText.substring(0, 500));
 
-    // Parse the outer API response as JSON safely
-    // then get the text content from it
     let extracted = null;
     try {
       const apiResp = JSON.parse(rawText);
       if (apiResp.error) throw new Error(apiResp.error.message || 'API error');
       const textContent = (apiResp.content || []).filter(function(b){ return b.type === 'text'; }).map(function(b){ return b.text; }).join('');
-      console.log('Model text:', textContent.substring(0, 300));
-      // Find the JSON object in the text content
       const braceStart = textContent.indexOf('{');
       if (braceStart !== -1) {
         let depth = 0, end = -1;
@@ -1029,12 +1182,10 @@ async function extractWithAI(file, isInvoice) {
           else if (textContent[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
         }
         const jsonStr = end !== -1 ? textContent.substring(braceStart, end + 1) : textContent.substring(braceStart);
-        console.log('JSON str:', jsonStr.substring(0, 200));
         extracted = JSON.parse(jsonStr);
       }
     } catch(parseErr) {
       console.error('Parse error:', parseErr.message);
-      console.error('Raw was:', rawText.substring(0, 300));
       throw parseErr;
     }
 
@@ -1064,7 +1215,6 @@ function fileToBase64(file) {
   });
 }
 
-// Form population
 function populateForm(data) {
   const g = function(full, abbr) { return data[full] || data[abbr] || ''; };
   const vn = data.vendor_name || data.vn || '';
@@ -1075,10 +1225,18 @@ function populateForm(data) {
   document.getElementById('f_po').value = data.customer_po || '';
   document.getElementById('f_vendor_wo').value = g('vendor_order_number','von');
   document.getElementById('f_order_date').value = g('order_date','od');
+  document.getElementById('f_expected_date').value = g('expected_date','ed');
   document.getElementById('f_amount').value = data.amount_total || data.amt || '';
   document.getElementById('f_invoice_num').value = g('invoice_number','inv');
   document.getElementById('f_invoice_date').value = g('invoice_date','id');
   document.getElementById('f_due_date').value = g('due_date','dd');
+  document.getElementById('f_address').value = data.job_address || '';
+
+  if (data.division) {
+    const divEl = document.getElementById('f_division');
+    if (data.division.toLowerCase().indexOf('comm') !== -1) divEl.value = 'Commercial';
+    else divEl.value = 'Residential';
+  }
 
   const vmap = { 'imperial': 'IMP', 'fhc': 'FHC', 'm3': 'M3', 'dfg': 'DFG', 'wf': 'WF', 'sky': 'Sky' };
   if (vn) {
@@ -1093,7 +1251,7 @@ function populateForm(data) {
     document.getElementById('f_jobtype').value = jt;
     if (jl.indexOf('hardware') !== -1 || jl.indexOf('handle') !== -1) {
       document.getElementById('f_material').value = 'hardware';
-    } else if (jl.indexOf('glass') !== -1 || jl.indexOf('mirror') !== -1 || jl.indexOf('shower') !== -1) {
+    } else {
       document.getElementById('f_material').value = 'glass';
     }
   }
@@ -1141,17 +1299,19 @@ function applyInvoiceToOrder(data) {
   showToast('Invoice data extracted and linked');
 }
 
-// Save order
 function saveOrder() {
   const order = {
     id: Date.now(),
     po: document.getElementById('f_po').value.trim(),
     customer: document.getElementById('f_customer').value.trim(),
+    address: document.getElementById('f_address').value.trim(),
+    division: document.getElementById('f_division').value,
     jobtype: document.getElementById('f_jobtype').value.trim(),
     material: document.getElementById('f_material').value,
     vendor: document.getElementById('f_vendor').value,
     vendor_wo: document.getElementById('f_vendor_wo').value.trim(),
     order_date: document.getElementById('f_order_date').value,
+    expected_date: document.getElementById('f_expected_date').value,
     completion_date: document.getElementById('f_completion_date').value,
     amount: parseFloat(document.getElementById('f_amount').value) || 0,
     invoice_num: document.getElementById('f_invoice_num').value.trim(),
@@ -1169,19 +1329,324 @@ function saveOrder() {
 }
 
 function clearForm() {
-  ['f_po','f_customer','f_jobtype','f_vendor_wo','f_amount','f_invoice_num'].forEach(function(id) {
+  ['f_po','f_customer','f_address','f_jobtype','f_vendor_wo','f_amount','f_invoice_num'].forEach(function(id) {
     document.getElementById(id).value = '';
   });
-  ['f_order_date','f_invoice_date','f_due_date','f_completion_date'].forEach(function(id) {
+  ['f_order_date','f_expected_date','f_invoice_date','f_due_date','f_completion_date'].forEach(function(id) {
     document.getElementById(id).value = '';
   });
   document.getElementById('f_status').value = 'open';
+  document.getElementById('f_division').value = 'Residential';
   document.getElementById('extractedForm').classList.remove('visible');
   document.getElementById('lineItemsSection').style.display = 'none';
   document.getElementById('fileInput').value = '';
 }
 
-// Render all
+// ==========================================
+// SMART GLAZIER IMPORT
+// ==========================================
+
+function showSGImport() {
+  sgParsedOrders = [];
+  document.getElementById('sgPreview').classList.remove('visible');
+  document.getElementById('sgImportBtn').style.display = 'none';
+  document.getElementById('sgLoading').classList.remove('visible');
+  document.getElementById('sgImportSummary').style.display = 'none';
+  document.getElementById('sgFileInput').value = '';
+  document.getElementById('sgModalOverlay').classList.add('open');
+}
+
+function closeSGModal(e, force) {
+  if (force || (e && e.target === document.getElementById('sgModalOverlay'))) {
+    document.getElementById('sgModalOverlay').classList.remove('open');
+  }
+}
+
+function handleSGFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  parseSGCSV(file);
+}
+
+function parseSGCSV(file) {
+  document.getElementById('sgLoading').classList.add('visible');
+  document.getElementById('sgPreview').classList.remove('visible');
+  document.getElementById('sgImportBtn').style.display = 'none';
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const text = e.target.result;
+      const lines = text.replace(/\r/g, '').split('\n');
+
+      // Vendor map for SG vendor names -> our codes
+      const vendorMap = {
+        'fhc': 'FHC',
+        'imperial glass': 'IMP',
+        'imperial tempered': 'IMP',
+        'sky building': 'Sky',
+        'sky': 'Sky',
+        'm3': 'M3',
+        'dfg': 'DFG',
+        'wf': 'WF'
+      };
+
+      let currentVendor = '';
+      const parsed = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        // Parse CSV line handling quoted fields
+        const fields = parseCSVLine(lines[i]);
+
+        // Check if this is a supplier header row
+        // Could appear in col 0 or col 1
+        for (let col = 0; col <= 1; col++) {
+          const cell = (fields[col] || '').trim();
+          if (cell.toLowerCase().startsWith('supplier :') || cell.toLowerCase().startsWith('supplier:')) {
+            const vName = cell.replace(/supplier\s*:\s*/i, '').trim().toLowerCase();
+            for (const k in vendorMap) {
+              if (vName.indexOf(k) !== -1) { currentVendor = vendorMap[k]; break; }
+            }
+            if (!currentVendor) currentVendor = cell.replace(/supplier\s*:\s*/i, '').trim();
+            break;
+          }
+        }
+
+        // Check if this looks like a data row
+        // PO # is in col 1 (col 0 is empty for data rows)
+        const poField = (fields[1] || '').trim();
+        const divField = (fields[2] || '').trim();
+        const ownerField = (fields[3] || '').trim();
+        const orderedField = (fields[6] || '').trim();
+        const expectedField = (fields[7] || '').trim();
+        const itemsOrderedField = (fields[8] || '').trim();
+        const itemsOutstandingField = (fields[9] || '').trim();
+        const netTotalField = (fields[10] || '').trim();
+
+        // Valid data row: has a PO#, a division, and a date
+        if (poField && (divField === 'Residential' || divField === 'Commercial') && orderedField) {
+          // Parse the smashed Owner+Customer+Address field
+          // Format: "Dion Harris CustomerName  Address"
+          // Owner is always "Dion Harris" (or similar), then customer, then address
+          const parsed_owner = parseOwnerField(ownerField);
+
+          // Parse amount - remove $ and commas
+          const amount = parseFloat((netTotalField || '0').replace(/[$,]/g, '')) || 0;
+
+          // Parse dates MM/DD/YYYY -> YYYY-MM-DD
+          const orderDate = parseSGDate(orderedField);
+          const expectedDate = parseSGDate(expectedField);
+
+          // Items outstanding
+          const itemsOrdered = parseInt(itemsOrderedField) || 0;
+          const itemsOutstanding = parseInt(itemsOutstandingField) || 0;
+
+          parsed.push({
+            po: poField,
+            vendor: currentVendor,
+            customer: parsed_owner.customer,
+            address: parsed_owner.address,
+            division: divField,
+            order_date: orderDate,
+            expected_date: expectedDate,
+            amount: amount,
+            items_ordered: itemsOrdered,
+            items_outstanding: itemsOutstanding,
+            status: 'open',
+            jobtype: 'glass',
+            material: 'glass',
+            source: 'sg_import'
+          });
+        }
+      }
+
+      document.getElementById('sgLoading').classList.remove('visible');
+
+      if (parsed.length === 0) {
+        showToast('No orders found - make sure this is an SG Purchase Orders CSV');
+        return;
+      }
+
+      sgParsedOrders = parsed;
+      renderSGPreview(parsed);
+
+    } catch(err) {
+      document.getElementById('sgLoading').classList.remove('visible');
+      showToast('Error parsing file: ' + err.message);
+      console.error(err);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function parseCSVLine(line) {
+  const fields = [];
+  let cur = '', inQ = false;
+  for (let j = 0; j < line.length; j++) {
+    const ch = line[j];
+    if (ch === '"') { inQ = !inQ; }
+    else if (ch === ',' && !inQ) { fields.push(cur); cur = ''; }
+    else { cur += ch; }
+  }
+  fields.push(cur);
+  return fields;
+}
+
+function parseOwnerField(raw) {
+  // SG smashes Owner + Customer + Address into one field
+  // Pattern: "Dion Harris[on] CustomerName  AddressNumbers Street"
+  // Strategy: strip the owner name prefix, then split customer from address
+  // Address usually starts with a number
+
+  const s = raw.trim();
+
+  // Common owner prefixes to strip
+  const ownerPrefixes = ['Dion Harrison', 'Dion Harris'];
+  let remainder = s;
+  for (const prefix of ownerPrefixes) {
+    if (s.toLowerCase().startsWith(prefix.toLowerCase())) {
+      remainder = s.substring(prefix.length).trim();
+      break;
+    }
+  }
+
+  // Now split customer from address
+  // Address starts where we see a number followed by a space and letters (street number)
+  // Look for pattern like "840 hackberry", "8 Aspen", "5924 Forest"
+  const addrMatch = remainder.match(/^(.*?)\s{2,}(\d+\s+\S.*)$/) ||
+                    remainder.match(/^(.*?)(\d{2,}\s+\S.*)$/);
+
+  if (addrMatch) {
+    return {
+      customer: addrMatch[1].trim(),
+      address: addrMatch[2].trim()
+    };
+  }
+
+  // Fallback: look for a lone number that starts an address
+  const numIdx = remainder.search(/\s\d+\s/);
+  if (numIdx !== -1) {
+    return {
+      customer: remainder.substring(0, numIdx).trim(),
+      address: remainder.substring(numIdx).trim()
+    };
+  }
+
+  return { customer: remainder, address: '' };
+}
+
+function parseSGDate(d) {
+  if (!d) return '';
+  // MM/DD/YYYY -> YYYY-MM-DD
+  const parts = d.split('/');
+  if (parts.length === 3) {
+    return parts[2] + '-' + parts[0].padStart(2,'0') + '-' + parts[1].padStart(2,'0');
+  }
+  return '';
+}
+
+function renderSGPreview(parsed) {
+  // Check for duplicates against existing orders
+  const existingPOs = new Set(orders.map(function(o) { return (o.po || '').trim().toLowerCase(); }));
+
+  let dupeCount = 0;
+  const rows = parsed.map(function(o) {
+    const isDupe = existingPOs.has((o.po || '').trim().toLowerCase());
+    if (isDupe) dupeCount++;
+
+    const itemsTag = o.items_outstanding === 0
+      ? '<span class="items-outstanding items-received">Received</span>'
+      : o.items_outstanding < o.items_ordered
+        ? '<span class="items-outstanding items-partial">' + o.items_outstanding + ' pending</span>'
+        : '<span class="items-outstanding items-pending">Not received</span>';
+
+    return '<div class="sg-preview-row' + (isDupe ? ' sg-dupe' : '') + '">' +
+      '<div style="font-family:\'DM Mono\',monospace;font-size:11px">' + escHtml(o.po) + '</div>' +
+      '<div><span class="vendor-tag-sm">' + escHtml(o.vendor) + '</span></div>' +
+      '<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escHtml(o.customer + (o.address ? ' — ' + o.address : '')) + '">' +
+        escHtml(o.customer) + (o.address ? '<span style="color:var(--muted);font-size:11px"> — ' + escHtml(o.address) + '</span>' : '') +
+      '</div>' +
+      '<div style="font-family:\'DM Mono\',monospace;font-size:11px">$' + (o.amount||0).toFixed(2) + '</div>' +
+      '<div>' + (isDupe ? '<span class="sg-dupe-tag">exists</span>' : itemsTag) + '</div>' +
+      '</div>';
+  }).join('');
+
+  document.getElementById('sgPreviewRows').innerHTML = rows;
+  document.getElementById('sgPreviewCount').textContent = parsed.length + ' orders found';
+  document.getElementById('sgPreviewDupes').textContent = dupeCount > 0 ? dupeCount + ' already exist (will be skipped)' : '';
+  document.getElementById('sgPreview').classList.add('visible');
+
+  const newCount = parsed.length - dupeCount;
+  document.getElementById('sgImportBtn').textContent = 'Import ' + newCount + ' New Orders';
+  document.getElementById('sgImportBtn').style.display = newCount > 0 ? 'inline-block' : 'none';
+
+  if (newCount === 0) {
+    showToast('All orders already exist - nothing to import');
+  }
+}
+
+function doSGImport() {
+  if (!sgParsedOrders.length) return;
+
+  const existingPOs = new Set(orders.map(function(o) { return (o.po || '').trim().toLowerCase(); }));
+  let imported = 0;
+
+  sgParsedOrders.forEach(function(o) {
+    if (existingPOs.has((o.po || '').trim().toLowerCase())) return;
+    orders.unshift({
+      id: Date.now() + imported,
+      po: o.po,
+      customer: o.customer,
+      address: o.address,
+      division: o.division,
+      jobtype: o.jobtype || 'glass',
+      material: o.material || 'glass',
+      vendor: o.vendor,
+      vendor_wo: '',
+      order_date: o.order_date,
+      expected_date: o.expected_date,
+      completion_date: '',
+      amount: o.amount,
+      invoice_num: '',
+      invoice_date: '',
+      due_date: '',
+      status: 'open',
+      items_ordered: o.items_ordered,
+      items_outstanding: o.items_outstanding,
+      source: 'sg_import',
+      added: new Date().toISOString()
+    });
+    imported++;
+  });
+
+  saveOrders();
+  renderAll();
+  closeSGModal(null, true);
+  showToast('Imported ' + imported + ' orders from Smart Glazier!');
+  setTimeout(function() { switchTab('orders'); }, 800);
+}
+
+// Drag and drop for SG zone
+const sgDropZone = document.getElementById('sgDropZone');
+sgDropZone.addEventListener('dragover', function(e) { e.preventDefault(); sgDropZone.classList.add('dragging'); });
+sgDropZone.addEventListener('dragleave', function() { sgDropZone.classList.remove('dragging'); });
+sgDropZone.addEventListener('drop', function(e) {
+  e.preventDefault();
+  sgDropZone.classList.remove('dragging');
+  const file = e.dataTransfer.files[0];
+  if (file) {
+    document.getElementById('sgFileInput').files = e.dataTransfer.files;
+    parseSGCSV(file);
+  }
+});
+
+// ==========================================
+// RENDER
+// ==========================================
+
 function renderAll() {
   renderStats();
   renderTable();
@@ -1219,12 +1684,14 @@ function renderTable() {
   const search = (document.getElementById('searchInput').value || '').toLowerCase();
   const fv = document.getElementById('filterVendor').value;
   const fs = document.getElementById('filterStatus').value;
+  const fd = document.getElementById('filterDivision').value;
 
   filteredOrders = orders.filter(function(o) {
-    const text = [o.po, o.customer, o.vendor, o.vendor_wo, o.invoice_num, o.jobtype].join(' ').toLowerCase();
+    const text = [o.po, o.customer, o.address, o.vendor, o.vendor_wo, o.invoice_num, o.jobtype].join(' ').toLowerCase();
     if (search && text.indexOf(search) === -1) return false;
     if (fv && o.vendor !== fv) return false;
     if (fs && normalizeStatus(o.status) !== fs) return false;
+    if (fd && (o.division || 'Residential') !== fd) return false;
     return true;
   });
 
@@ -1235,7 +1702,7 @@ function renderTable() {
   const tbody = document.getElementById('ordersBody');
 
   if (filteredOrders.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="11"><div class="empty-state"><div class="icon">&#128203;</div><p>No orders found. Scan one to get started!</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12"><div class="empty-state"><div class="icon">&#128203;</div><p>No orders found. Scan one or import from Smart Glazier!</p></div></td></tr>';
   } else {
     tbody.innerHTML = pageOrders.map(function(o) {
       const idx = orders.indexOf(o);
@@ -1243,19 +1710,23 @@ function renderTable() {
       const isOverdue = status === 'open' && o.due_date && new Date(o.due_date) < today;
       const dueFmt = o.due_date ? new Date(o.due_date + 'T00:00:00').toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'}) : '-';
       const orderFmt = o.order_date ? new Date(o.order_date + 'T00:00:00').toLocaleDateString('en-US', {month:'short',day:'numeric'}) : '-';
-      const completionFmt = o.completion_date ? new Date(o.completion_date + 'T00:00:00').toLocaleDateString('en-US', {month:'short',day:'numeric'}) : '-';
+      const expectedFmt = o.expected_date ? new Date(o.expected_date + 'T00:00:00').toLocaleDateString('en-US', {month:'short',day:'numeric'}) : '-';
       const amt = o.amount ? '$' + parseFloat(o.amount).toLocaleString('en-US', {minimumFractionDigits:2}) : '-';
+      const div = o.division || 'Residential';
+      const divClass = div === 'Commercial' ? 'division-commercial' : 'division-residential';
+
       return '<tr onclick="openModal(' + idx + ')">' +
         '<td style="font-family:\'DM Mono\',monospace;font-size:12px">' + escHtml(o.po || '-') + '</td>' +
         '<td>' + escHtml(o.customer || '-') + '</td>' +
-        '<td style="color:var(--muted)">' + escHtml(o.jobtype || '-') + '</td>' +
+        '<td style="color:var(--muted);font-size:12px">' + escHtml(o.address || '-') + '</td>' +
+        '<td><span class="division-pill ' + divClass + '">' + escHtml(div) + '</span></td>' +
         '<td><span style="font-family:\'DM Mono\',monospace;font-size:12px;background:var(--surface2);padding:2px 7px;border-radius:4px">' + escHtml(o.vendor || '-') + '</span></td>' +
-        '<td style="font-family:\'DM Mono\',monospace;font-size:12px;color:var(--muted)">' + escHtml(o.vendor_wo || '-') + '</td>' +
         '<td style="color:var(--muted)">' + orderFmt + '</td>' +
-        '<td style="color:var(--muted)">' + completionFmt + '</td>' +
+        '<td style="color:var(--muted)">' + expectedFmt + '</td>' +
         '<td style="font-weight:500">' + amt + '</td>' +
         '<td style="font-family:\'DM Mono\',monospace;font-size:12px;color:var(--muted)">' + escHtml(o.invoice_num || '-') + '</td>' +
         '<td style="color:' + (isOverdue ? 'var(--accent2)' : 'var(--muted)') + '">' + dueFmt + '</td>' +
+        '<td style="color:var(--muted);font-size:12px">' + escHtml(o.material || '-') + '</td>' +
         '<td><span class="status-pill status-' + status + '">' + status + '</span></td>' +
         '</tr>';
     }).join('');
@@ -1271,7 +1742,6 @@ function changePage(dir) {
   renderTable();
 }
 
-// Vendor reports
 function renderVendors() {
   const vendors = [];
   orders.forEach(function(o) { if (o.vendor && vendors.indexOf(o.vendor) === -1) vendors.push(o.vendor); });
@@ -1280,7 +1750,7 @@ function renderVendors() {
   const grid = document.getElementById('vendorGrid');
 
   if (vendors.length === 0) {
-    grid.innerHTML = '<div class="empty-state"><div class="icon">&#127981;</div><p>No vendor data yet. Scan an order first.</p></div>';
+    grid.innerHTML = '<div class="empty-state"><div class="icon">&#127981;</div><p>No vendor data yet. Scan an order or import from Smart Glazier.</p></div>';
     return;
   }
 
@@ -1300,7 +1770,7 @@ function renderVendors() {
           const diff = Math.round((d - today) / 86400000);
           const cls = diff < 0 ? 'overdue' : diff <= 7 ? 'soon' : 'ok';
           const label = diff < 0 ? (Math.abs(diff) + 'd overdue') : diff === 0 ? 'Due today' : (diff + 'd');
-          return '<div class="due-item"><span>' + escHtml(o.po || o.vendor_wo || '-') + ' - ' + escHtml((o.customer || '').substring(0,20)) + '</span>' +
+          return '<div class="due-item"><span>' + escHtml(o.po || o.vendor_wo || '-') + ' — ' + escHtml((o.customer || '').substring(0,20)) + '</span>' +
             '<span class="due-date ' + cls + '">' + d.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' (' + label + ')</span></div>';
         }).join('');
 
@@ -1322,13 +1792,18 @@ function openModal(idx) {
   activeOrderIdx = idx;
   const o = orders[idx];
   const status = normalizeStatus(o.status);
+  const div = o.division || 'Residential';
 
-  document.getElementById('modalTitle').textContent = (o.po || 'Order') + ' - ' + (o.customer || '');
-  document.getElementById('modalSub').textContent = (o.vendor || '') + ' - ' + (o.jobtype || '') + ' - ' + (o.material || '');
+  document.getElementById('modalTitle').textContent = (o.po || 'Order') + ' — ' + (o.customer || '');
+  document.getElementById('modalSub').textContent = (o.vendor || '') + ' · ' + div + (o.address ? ' · ' + o.address : '');
 
   document.getElementById('modalOrderInfo').innerHTML =
     '<div class="modal-row"><span>EG PO</span><input class="modal-input" id="me_po" value="' + escHtml(o.po||'') + '"></div>' +
     '<div class="modal-row"><span>Customer</span><input class="modal-input" id="me_customer" value="' + escHtml(o.customer||'') + '"></div>' +
+    '<div class="modal-row"><span>Job Address</span><input class="modal-input" id="me_address" value="' + escHtml(o.address||'') + '"></div>' +
+    '<div class="modal-row"><span>Division</span><select class="modal-input" id="me_division">' +
+      ['Residential','Commercial'].map(function(v) { return '<option' + (div===v?' selected':'') + '>' + v + '</option>'; }).join('') +
+    '</select></div>' +
     '<div class="modal-row"><span>Job Type</span><input class="modal-input" id="me_jobtype" value="' + escHtml(o.jobtype||'') + '"></div>' +
     '<div class="modal-row"><span>Material</span><select class="modal-input" id="me_material">' +
       ['glass','hardware','kit'].map(function(v) { return '<option' + (o.material===v?' selected':'') + '>' + v + '</option>'; }).join('') +
@@ -1338,8 +1813,10 @@ function openModal(idx) {
     '</select></div>' +
     '<div class="modal-row"><span>Vendor WO #</span><input class="modal-input" id="me_vendor_wo" value="' + escHtml(o.vendor_wo||'') + '"></div>' +
     '<div class="modal-row"><span>Order Date</span><input class="modal-input" type="date" id="me_order_date" value="' + (o.order_date||'') + '"></div>' +
+    '<div class="modal-row"><span>Expected Delivery</span><input class="modal-input" type="date" id="me_expected_date" value="' + (o.expected_date||'') + '"></div>' +
     '<div class="modal-row"><span>Completion Date</span><input class="modal-input" type="date" id="me_completion_date" value="' + (o.completion_date||'') + '"></div>' +
     '<div class="modal-row"><span>Amount ($)</span><input class="modal-input" type="number" id="me_amount" value="' + (o.amount||'') + '"></div>' +
+    (o.items_ordered ? '<div class="modal-row"><span>Items</span><span>' + (o.items_ordered - o.items_outstanding) + ' / ' + o.items_ordered + ' received</span></div>' : '') +
     '<div class="modal-row"><span>Status</span><select class="modal-input" id="me_status">' +
       '<option value="open"' + (normalizeStatus(o.status)==='open'?' selected':'') + '>open</option>' +
       '<option value="paid"' + (normalizeStatus(o.status)==='paid'?' selected':'') + '>paid</option>' +
@@ -1388,11 +1865,14 @@ function saveModalChanges() {
   const o = orders[activeOrderIdx];
   o.po = document.getElementById('me_po').value.trim();
   o.customer = document.getElementById('me_customer').value.trim();
+  o.address = document.getElementById('me_address').value.trim();
+  o.division = document.getElementById('me_division').value;
   o.jobtype = document.getElementById('me_jobtype').value.trim();
   o.material = document.getElementById('me_material').value;
   o.vendor = document.getElementById('me_vendor').value;
   o.vendor_wo = document.getElementById('me_vendor_wo').value.trim();
   o.order_date = document.getElementById('me_order_date').value;
+  o.expected_date = document.getElementById('me_expected_date').value;
   o.completion_date = document.getElementById('me_completion_date').value;
   o.amount = parseFloat(document.getElementById('me_amount').value) || 0;
   o.status = document.getElementById('me_status').value;
@@ -1405,12 +1885,12 @@ function saveModalChanges() {
   showToast('Changes saved');
 }
 
-// Export to Excel/CSV
+// Export to CSV
 function exportToExcel() {
-  const headers = ['EG PO','Customer/Site','Job Type','Material','Vendor','Vendor WO','Order Date','Completion Date','Amount','Invoice #','Invoice Date','Due Date','Status'];
+  const headers = ['EG PO','Customer','Address','Division','Job Type','Material','Vendor','Vendor WO','Order Date','Expected Date','Completion Date','Amount','Invoice #','Invoice Date','Due Date','Status'];
   const rows = (filteredOrders.length > 0 ? filteredOrders : orders).map(function(o) {
-    return [o.po||'',o.customer||'',o.jobtype||'',o.material||'',o.vendor||'',o.vendor_wo||'',
-            o.order_date||'',o.completion_date||'',o.amount||'',o.invoice_num||'',
+    return [o.po||'',o.customer||'',o.address||'',o.division||'',o.jobtype||'',o.material||'',o.vendor||'',o.vendor_wo||'',
+            o.order_date||'',o.expected_date||'',o.completion_date||'',o.amount||'',o.invoice_num||'',
             o.invoice_date||'',o.due_date||'',normalizeStatus(o.status)];
   });
   const csv = [headers].concat(rows).map(function(r) {
@@ -1576,37 +2056,25 @@ function doImport() {
 
   let parsed = null;
 
-  // Try JSON first
   try {
     parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) parsed = null;
   } catch(e) {}
 
-  // Try CSV if JSON failed
   if (!parsed) {
     try {
-      const lines = raw.replace(/\r/g,'').split(String.fromCharCode(10)).filter(function(l) { return l.trim(); });
+      const lines = raw.replace(/\r/g,'').split('\n').filter(function(l) { return l.trim(); });
       if (lines.length < 2) throw new Error('Not enough rows');
-      // Parse CSV header
       const headers = lines[0].split(',').map(function(h) { return h.replace(/^"|"$/g,'').trim(); });
       parsed = [];
       for (let i = 1; i < lines.length; i++) {
-        // Handle quoted CSV fields
-        const fields = [];
-        let cur = '', inQ = false;
-        for (let j = 0; j < lines[i].length; j++) {
-          const ch = lines[i][j];
-          if (ch === '"') { inQ = !inQ; }
-          else if (ch === ',' && !inQ) { fields.push(cur); cur = ''; }
-          else { cur += ch; }
-        }
-        fields.push(cur);
+        const fields = parseCSVLine(lines[i]);
         const row = {};
-        // Map CSV columns to order fields
         const colMap = {
-          'EG PO': 'po', 'Customer/Site': 'customer', 'Job Type': 'jobtype',
-          'Material': 'material', 'Vendor': 'vendor', 'Vendor WO': 'vendor_wo',
-          'Order Date': 'order_date', 'Completion Date': 'completion_date',
+          'EG PO': 'po', 'Customer': 'customer', 'Address': 'address', 'Division': 'division',
+          'Customer/Site': 'customer', 'Job Type': 'jobtype', 'Material': 'material',
+          'Vendor': 'vendor', 'Vendor WO': 'vendor_wo', 'Order Date': 'order_date',
+          'Expected Date': 'expected_date', 'Completion Date': 'completion_date',
           'Amount': 'amount', 'Invoice #': 'invoice_num', 'Invoice Date': 'invoice_date',
           'Due Date': 'due_date', 'Status': 'status'
         };
@@ -1640,7 +2108,6 @@ function doImport() {
   showToast('Imported ' + orders.length + ' orders successfully!');
 }
 
-// Clear all data
 function clearAllData() {
   if (!confirm('This will delete ALL saved orders. Are you sure?')) return;
   try { localStorage.removeItem('eridion_orders_v2'); } catch(e) {}
@@ -1649,13 +2116,6 @@ function clearAllData() {
   saveOrders();
   renderAll();
   showToast('All data cleared');
-}
-
-// Helpers
-function fmtDate(d) {
-  if (!d) return '-';
-  try { return new Date(d + 'T00:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}); }
-  catch(e) { return d; }
 }
 
 function escHtml(s) {
@@ -1669,7 +2129,6 @@ function showToast(msg) {
   setTimeout(function() { t.classList.remove('show'); }, 2800);
 }
 
-// API Key management
 function saveApiKey() {
   const key = document.getElementById('apiKeyInput').value.trim();
   if (!key || !key.startsWith('sk-ant-')) {
@@ -1687,7 +2146,7 @@ function getApiKey() {
   try { return localStorage.getItem('eridion_api_key') || ''; } catch(e) { return ''; }
 }
 
-// Drag and drop
+// Drag and drop for main drop zone
 const dropZone = document.getElementById('dropZone');
 dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('dragging'); });
 dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('dragging'); });
