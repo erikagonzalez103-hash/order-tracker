@@ -738,7 +738,7 @@ function getVendorList() {
   orders.forEach(function(o) {
     if (o.vendor && base.indexOf(o.vendor) === -1) base.push(o.vendor);
   });
-  return [...new Set(base)];
+  return base.filter(function(v, i, arr) { return arr.indexOf(v) === i; });
 }
 
 function saveCustomVendors() {
@@ -792,7 +792,7 @@ function parseSGCSV(file) {
   }; reader.readAsText(file);
 }
 function parseCSVLine(line){const fields=[];let cur='',inQ=false;for(let j=0;j<line.length;j++){const ch=line[j];if(ch==='"')inQ=!inQ;else if(ch===','&&!inQ){fields.push(cur);cur='';}else cur+=ch;}fields.push(cur);return fields;}
-function parseOwnerField(raw){const s=raw.trim();const ownerPrefixes=['Dion Harrison','Dion Harris'];let remainder=s;for(const prefix of ownerPrefixes){if(s.toLowerCase().startsWith(prefix.toLowerCase())){remainder=s.substring(prefix.length).trim();break;}}const addrMatch=remainder.match(/^(.*?)\s{2,}(\d+\s+\S.*)$/)||remainder.match(/^(.*?)(\d{2,}\s+\S.*)$/);if(addrMatch)return{customer:addrMatch[1].trim(),address:addrMatch[2].trim()};const numIdx=remainder.search(/\s\d+\s/);if(numIdx!==-1)return{customer:remainder.substring(0,numIdx).trim(),address:remainder.substring(numIdx).trim()};return{customer:remainder,address:''};}
+function parseOwnerField(raw){const s=raw.trim();const ownerPrefixes=['Dion Harrison','Dion Harris'];let remainder=s;for(var pi=0;pi<ownerPrefixes.length;pi++){if(s.toLowerCase().startsWith(ownerPrefixes[pi].toLowerCase())){remainder=s.substring(ownerPrefixes[pi].length).trim();break;}}const addrMatch=remainder.match(/^(.*?)\s{2,}(\d+\s+\S.*)$/)||remainder.match(/^(.*?)(\d{2,}\s+\S.*)$/);if(addrMatch)return{customer:addrMatch[1].trim(),address:addrMatch[2].trim()};const numIdx=remainder.search(/\s\d+\s/);if(numIdx!==-1)return{customer:remainder.substring(0,numIdx).trim(),address:remainder.substring(numIdx).trim()};return{customer:remainder,address:''};}
 function parseSGDate(d){if(!d)return'';const parts=d.split('/');if(parts.length===3)return parts[2]+'-'+parts[0].padStart(2,'0')+'-'+parts[1].padStart(2,'0');return'';}
 function renderSGPreview(parsed){
   const existingPOs=new Set(orders.map(function(o){return(o.po||'').trim().toLowerCase();}));
@@ -921,14 +921,15 @@ async function checkMondayReport(){
 let _cleanupGroups = [];
 
 function showCleanup() {
-  document.getElementById('cleanupOverlay').classList.add('open');
-  document.getElementById('cleanup-scanning').style.display = 'block';
-  document.getElementById('cleanup-summary').style.display = 'none';
-  document.getElementById('cleanup-groups').innerHTML = '';
-  document.getElementById('cleanup-empty').style.display = 'none';
-  document.getElementById('cleanup-merge-all-btn').style.display = 'none';
-
-  setTimeout(function() { runCleanupScan(); }, 300);
+  try {
+    document.getElementById('cleanupOverlay').classList.add('open');
+    document.getElementById('cleanup-scanning').style.display = 'block';
+    document.getElementById('cleanup-summary').style.display = 'none';
+    document.getElementById('cleanup-groups').innerHTML = '';
+    document.getElementById('cleanup-empty').style.display = 'none';
+    document.getElementById('cleanup-merge-all-btn').style.display = 'none';
+    setTimeout(function() { try { runCleanupScan(); } catch(e) { document.getElementById('cleanup-scanning').style.display='none'; document.getElementById('cleanup-groups').innerHTML='<div style="padding:20px;color:var(--accent2)">Scan error: '+e.message+'</div>'; } }, 300);
+  } catch(e) { alert('Cleanup error: ' + e.message); }
 }
 
 function closeCleanup(e, force) {
