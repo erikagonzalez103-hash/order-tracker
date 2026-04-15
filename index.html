@@ -164,6 +164,7 @@
     <button onclick="switchTab('orders')">All Orders</button>
     <button onclick="switchTab('vendors')">Vendor Reports</button>
     <button onclick="showSGImport()" style="background:rgba(192,132,252,.1);color:var(--accent4);border-color:rgba(192,132,252,.3)">⬆ SG Import</button>
+    <button onclick="showCleanup()" style="background:rgba(251,191,36,.1);color:var(--warn);border-color:rgba(251,191,36,.3)">🧹 Cleanup</button>
     <button onclick="syncToDrive()" style="background:rgba(74,158,255,.1);color:var(--accent3);border-color:rgba(74,158,255,.3)">☁ Drive Sync</button>
     <button onclick="showImportExport()" style="background:rgba(79,255,176,.1);color:var(--accent);border-color:rgba(79,255,176,.3)">⇅ Import/Export</button>
     <button onclick="clearAllData()" style="background:rgba(255,107,74,.1);color:var(--accent2);border-color:rgba(255,107,74,.3)" title="Use if app won't load">⚠ Reset</button>
@@ -203,7 +204,7 @@
           <div class="field"><label>Division</label><select id="f_division"><option value="Residential">Residential</option><option value="Commercial">Commercial</option></select></div>
           <div class="field"><label>Job Type</label><input type="text" id="f_jobtype" placeholder="showers, mirrors..."></div>
           <div class="field"><label>Material</label><select id="f_material"><option>glass</option><option>hardware</option><option>kit</option></select></div>
-          <div class="field"><label>Vendor</label><select id="f_vendor"><option value="IMP">IMP — Imperial Tempered Glass</option><option value="FHC">FHC</option><option value="M3">M3</option><option value="DFG">DFG</option><option value="WF">WF</option><option value="Sky">Sky</option></select></div>
+          <div class="field"><label>Vendor</label><input type="text" id="f_vendor" list="vendor-list" placeholder="Type or select vendor" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;padding:8px 10px;outline:none;"><datalist id="vendor-list"><option value="IMP">Imperial Tempered Glass</option><option value="FHC">FHC</option><option value="M3">M3</option><option value="DFG">DFG</option><option value="WF">WF</option><option value="Sky">Sky</option><option value="CMI">CMI</option></datalist></div>
           <div class="field"><label>Vendor WO / Order #</label><input type="text" id="f_vendor_wo" placeholder="Order number"></div>
           <div class="field"><label>Order Date</label><input type="date" id="f_order_date"></div>
           <div class="field"><label>Expected Delivery</label><input type="date" id="f_expected_date"></div>
@@ -270,6 +271,7 @@
 </main>
 
 <!-- DETAIL MODAL -->
+<datalist id="vendor-list-modal"></datalist>
 <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
   <div class="modal" id="detailModal">
     <div class="modal-title" id="modalTitle">Order Details</div>
@@ -332,6 +334,49 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- CLEANUP MODAL -->
+<div class="modal-overlay" id="cleanupOverlay" onclick="closeCleanup(event)">
+  <div class="modal" style="width:760px;max-width:95vw;max-height:90vh;">
+    <div class="modal-title">🧹 Order Cleanup</div>
+    <div class="modal-sub">Scan your orders for duplicates and related documents (POs, sales orders, invoices) that can be merged into a single line item.</div>
+
+    <div id="cleanup-scanning" style="display:none;text-align:center;padding:24px;">
+      <div class="spinner" style="margin:0 auto 12px;"></div>
+      <div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--muted);">Scanning orders for duplicates and matches...</div>
+    </div>
+
+    <div id="cleanup-summary" style="display:none;margin-bottom:16px;">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
+        <div style="background:var(--bg);border-radius:8px;padding:14px;text-align:center;border-left:3px solid var(--accent2)">
+          <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:700;color:var(--accent2)" id="cleanup-dupes">0</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Exact Duplicates</div>
+        </div>
+        <div style="background:var(--bg);border-radius:8px;padding:14px;text-align:center;border-left:3px solid var(--warn)">
+          <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:700;color:var(--warn)" id="cleanup-related">0</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Can Be Merged</div>
+        </div>
+        <div style="background:var(--bg);border-radius:8px;padding:14px;text-align:center;border-left:3px solid var(--accent)">
+          <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:700;color:var(--accent)" id="cleanup-clean">0</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Clean Orders</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="cleanup-groups" style="max-height:50vh;overflow-y:auto;"></div>
+
+    <div id="cleanup-empty" style="display:none;text-align:center;padding:30px;color:var(--accent);">
+      <div style="font-size:28px;margin-bottom:8px;">✓</div>
+      <div style="font-family:Syne,sans-serif;font-size:15px;font-weight:700;">All clean!</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px;">No duplicates or mergeable orders found.</div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="cleanup-merge-all-btn" onclick="mergeAllGroups()" style="display:none">Merge All Groups</button>
+      <button class="btn btn-secondary" onclick="closeCleanup(null,true)" style="margin-left:auto">Close</button>
+    </div>
+  </div>
+</div>
 <script>
 const WORKER_URL = 'https://frosty-base-f01e.erikagonzalez103.workers.dev';
 const STORAGE_KEY = 'eridion_orders_v2';
@@ -439,6 +484,31 @@ async function extractWithAI(file, isInvoice) {
 function fileToBase64(file) { return new Promise(function(res, rej) { const r = new FileReader(); r.onload = function() { res(r.result.split(',')[1]); }; r.onerror = function() { rej(new Error('Read failed')); }; r.readAsDataURL(file); }); }
 
 function populateForm(data) {
+  // ═══ CHECK: Is this an invoice that should link to an existing order? ═══
+  const docType = data.doc_type || '';
+  if (docType === 'invoice' || data.invoice_number || data.inv) {
+    if (checkInvoiceLinking(data)) return; // Handled — linked to existing order
+  }
+
+  // ═══ CHECK: Is this a duplicate of an existing order? ═══
+  const checkPO = data.customer_po || '';
+  const checkWO = data.vendor_order_number || data.von || '';
+  const checkVendor = data.vendor_name || data.vn || '';
+  const checkAmt = data.amount_total || data.amt || 0;
+  const dupeMatch = findMatchingOrder(checkPO, checkWO, checkVendor, checkAmt);
+  if (dupeMatch.exact) {
+    const o = dupeMatch.order;
+    const idx = orders.indexOf(o);
+    if (!confirm('⚠ This document may be a duplicate!\n\n' +
+      'Existing order found:\n' +
+      'PO: ' + (o.po || '-') + '  |  Vendor: ' + (o.vendor || '-') + '  |  $' + (o.amount || 0).toFixed(2) + '\n' +
+      'Match reason: ' + dupeMatch.reason + '\n\n' +
+      '• OK = Load into form anyway (you can review before saving)\n• Cancel = Discard this scan')) {
+      showToast('Scan cancelled');
+      return;
+    }
+  }
+
   const g = function(full, abbr) { return data[full] || data[abbr] || ''; };
   const vn = data.vendor_name || data.vn || '';
   const jt = data.job_type || data.jt || '';
@@ -454,8 +524,18 @@ function populateForm(data) {
   document.getElementById('f_due_date').value = g('due_date','dd');
   document.getElementById('f_address').value = data.job_address || '';
   if (data.division) { const divEl = document.getElementById('f_division'); if (data.division.toLowerCase().indexOf('comm') !== -1) divEl.value = 'Commercial'; else divEl.value = 'Residential'; }
-  const vmap = { 'imperial': 'IMP', 'fhc': 'FHC', 'm3': 'M3', 'dfg': 'DFG', 'wf': 'WF', 'sky': 'Sky' };
-  if (vn) { const vl = vn.toLowerCase(); for (const k in vmap) { if (vl.indexOf(k) !== -1) { document.getElementById('f_vendor').value = vmap[k]; break; } } }
+  const vmap = { 'imperial': 'IMP', 'fhc': 'FHC', 'm3': 'M3', 'dfg': 'DFG', 'wf': 'WF', 'waterfall': 'WF', 'sky': 'Sky', 'cmi': 'CMI' };
+  if (vn) {
+    const vl = vn.toLowerCase();
+    let matched = false;
+    for (const k in vmap) { if (vl.indexOf(k) !== -1) { document.getElementById('f_vendor').value = vmap[k]; matched = true; break; } }
+    if (!matched) {
+      // Unknown vendor — use the raw name from the document
+      document.getElementById('f_vendor').value = vn;
+      // Add to datalist if not already there
+      addVendorToDatalist(vn);
+    }
+  }
   if (jt) { document.getElementById('f_jobtype').value = jt; if (jt.toLowerCase().indexOf('hardware') !== -1 || jt.toLowerCase().indexOf('handle') !== -1) document.getElementById('f_material').value = 'hardware'; else document.getElementById('f_material').value = 'glass'; }
   if (cn) document.getElementById('f_customer').value = cn;
   const docType = data.doc_type || '';
@@ -482,13 +562,204 @@ function applyInvoiceToOrder(data) {
 }
 
 function saveOrder() {
-  const order = { id: Date.now(), po: document.getElementById('f_po').value.trim(), customer: document.getElementById('f_customer').value.trim(), address: document.getElementById('f_address').value.trim(), division: document.getElementById('f_division').value, jobtype: document.getElementById('f_jobtype').value.trim(), material: document.getElementById('f_material').value, vendor: document.getElementById('f_vendor').value, vendor_wo: document.getElementById('f_vendor_wo').value.trim(), order_date: document.getElementById('f_order_date').value, expected_date: document.getElementById('f_expected_date').value, completion_date: document.getElementById('f_completion_date').value, amount: parseFloat(document.getElementById('f_amount').value) || 0, invoice_num: document.getElementById('f_invoice_num').value.trim(), invoice_date: document.getElementById('f_invoice_date').value, due_date: document.getElementById('f_due_date').value, status: document.getElementById('f_status').value, added: new Date().toISOString() };
+  const po = document.getElementById('f_po').value.trim();
+  const vendor_wo = document.getElementById('f_vendor_wo').value.trim();
+  const vendor = document.getElementById('f_vendor').value.trim();
+  const amount = parseFloat(document.getElementById('f_amount').value) || 0;
+
+  // ═══ DUPLICATE DETECTION ═══
+  const match = findMatchingOrder(po, vendor_wo, vendor, amount);
+  if (match.exact) {
+    // Exact duplicate found
+    const o = match.order;
+    const idx = orders.indexOf(o);
+    if (!confirm('⚠ Duplicate detected!\n\nThis looks like an order that already exists:\n' +
+      'PO: ' + (o.po || '-') + '  |  Vendor: ' + (o.vendor || '-') + '  |  $' + (o.amount || 0).toFixed(2) + '\n\n' +
+      'Do you want to UPDATE the existing order with this new data?\n\n' +
+      '• OK = Override existing order\n• Cancel = Discard this upload')) {
+      showToast('Upload cancelled — existing order unchanged');
+      return;
+    }
+    // Override: update the existing order with form data
+    updateOrderFromForm(o);
+    saveOrders(); renderAll(); clearForm();
+    showToast('Existing order updated');
+    setTimeout(function() { openModal(idx); }, 500);
+    return;
+  }
+
+  // Normal save — no duplicate
+  const order = buildOrderFromForm();
   orders.unshift(order); saveOrders(); renderAll(); clearForm(); showToast('Order saved');
   setTimeout(function() { switchTab('orders'); }, 800);
 }
 
+function buildOrderFromForm() {
+  return {
+    id: Date.now(),
+    po: document.getElementById('f_po').value.trim(),
+    customer: document.getElementById('f_customer').value.trim(),
+    address: document.getElementById('f_address').value.trim(),
+    division: document.getElementById('f_division').value,
+    jobtype: document.getElementById('f_jobtype').value.trim(),
+    material: document.getElementById('f_material').value,
+    vendor: document.getElementById('f_vendor').value.trim(),
+    vendor_wo: document.getElementById('f_vendor_wo').value.trim(),
+    order_date: document.getElementById('f_order_date').value,
+    expected_date: document.getElementById('f_expected_date').value,
+    completion_date: document.getElementById('f_completion_date').value,
+    amount: parseFloat(document.getElementById('f_amount').value) || 0,
+    invoice_num: document.getElementById('f_invoice_num').value.trim(),
+    invoice_date: document.getElementById('f_invoice_date').value,
+    due_date: document.getElementById('f_due_date').value,
+    status: document.getElementById('f_status').value,
+    added: new Date().toISOString()
+  };
+}
+
+function updateOrderFromForm(o) {
+  o.po = document.getElementById('f_po').value.trim() || o.po;
+  o.customer = document.getElementById('f_customer').value.trim() || o.customer;
+  o.address = document.getElementById('f_address').value.trim() || o.address;
+  o.division = document.getElementById('f_division').value || o.division;
+  o.jobtype = document.getElementById('f_jobtype').value.trim() || o.jobtype;
+  o.material = document.getElementById('f_material').value || o.material;
+  o.vendor = document.getElementById('f_vendor').value.trim() || o.vendor;
+  o.vendor_wo = document.getElementById('f_vendor_wo').value.trim() || o.vendor_wo;
+  o.order_date = document.getElementById('f_order_date').value || o.order_date;
+  o.expected_date = document.getElementById('f_expected_date').value || o.expected_date;
+  o.completion_date = document.getElementById('f_completion_date').value || o.completion_date;
+  var newAmt = parseFloat(document.getElementById('f_amount').value);
+  if (newAmt > 0) o.amount = newAmt;
+  var invNum = document.getElementById('f_invoice_num').value.trim();
+  if (invNum) o.invoice_num = invNum;
+  var invDate = document.getElementById('f_invoice_date').value;
+  if (invDate) o.invoice_date = invDate;
+  var dueDate = document.getElementById('f_due_date').value;
+  if (dueDate) o.due_date = dueDate;
+}
+
+// ═══ DUPLICATE / INVOICE MATCHING ENGINE ═══
+function findMatchingOrder(po, vendorWO, vendor, amount) {
+  // Priority 1: Exact PO match
+  if (po) {
+    var poMatch = orders.find(function(o) {
+      return o.po && o.po.trim().toLowerCase() === po.trim().toLowerCase();
+    });
+    if (poMatch) return { exact: true, order: poMatch, reason: 'PO# match' };
+  }
+  // Priority 2: Vendor WO match
+  if (vendorWO) {
+    var woMatch = orders.find(function(o) {
+      return o.vendor_wo && o.vendor_wo.trim().toLowerCase() === vendorWO.trim().toLowerCase();
+    });
+    if (woMatch) return { exact: true, order: woMatch, reason: 'Vendor WO# match' };
+  }
+  // Priority 3: Same vendor + same amount (within $1)
+  if (vendor && amount > 0) {
+    var vl = vendor.trim().toLowerCase();
+    var amtMatch = orders.find(function(o) {
+      return (o.vendor || '').trim().toLowerCase() === vl &&
+             Math.abs((o.amount || 0) - amount) < 1;
+    });
+    if (amtMatch) return { exact: true, order: amtMatch, reason: 'Vendor + amount match' };
+  }
+  return { exact: false, order: null, reason: null };
+}
+
+// ═══ INVOICE-TO-ORDER LINKING ═══
+// Called from populateForm when doc_type is 'invoice' and a matching order exists
+function checkInvoiceLinking(data) {
+  var po = data.customer_po || '';
+  var vendorWO = data.vendor_order_number || data.von || '';
+  var vendor = data.vendor_name || data.vn || '';
+  var amount = data.amount_total || data.amt || 0;
+  var invoiceNum = data.invoice_number || data.inv || '';
+
+  // Try to find a matching open order
+  var match = findMatchingOrder(po, vendorWO, vendor, amount);
+  if (!match.exact) return false;
+
+  var o = match.order;
+  var idx = orders.indexOf(o);
+
+  // Only link if the existing order doesn't already have this invoice
+  if (o.invoice_num && o.invoice_num === invoiceNum) {
+    showToast('This invoice is already linked to ' + (o.po || 'this order'));
+    return true;
+  }
+
+  if (confirm('📎 Invoice match found!\n\n' +
+    'This invoice appears to match an existing order:\n' +
+    'PO: ' + (o.po || '-') + '  |  Vendor: ' + (o.vendor || '-') + '  |  $' + (o.amount || 0).toFixed(2) + '\n' +
+    'Match reason: ' + match.reason + '\n\n' +
+    'Link this invoice to the existing order?\n\n' +
+    '• OK = Link invoice to existing order\n• Cancel = Create as new order instead')) {
+
+    // Link invoice data to existing order
+    if (invoiceNum) o.invoice_num = invoiceNum;
+    if (data.invoice_date || data.id) o.invoice_date = data.invoice_date || data.id;
+    if (data.due_date || data.dd) o.due_date = data.due_date || data.dd;
+    if (amount > 0 && !o.amount) o.amount = amount;
+    o.status = 'open'; // Has an invoice now, so it's open/payable
+
+    saveOrders(); renderAll(); clearForm();
+    showToast('Invoice linked to ' + (o.po || 'existing order'));
+    setTimeout(function() { openModal(idx); }, 500);
+    return true; // Handled — don't populate the form
+  }
+  return false; // User chose to create new order
+}
+
+// ═══ VENDOR DATALIST MANAGEMENT ═══
+function addVendorToDatalist(vendorName) {
+  if (!vendorName) return;
+  var datalist = document.getElementById('vendor-list');
+  if (!datalist) return;
+  // Check if already exists
+  var existing = datalist.querySelectorAll('option');
+  for (var i = 0; i < existing.length; i++) {
+    if (existing[i].value.toLowerCase() === vendorName.toLowerCase()) return;
+  }
+  var opt = document.createElement('option');
+  opt.value = vendorName;
+  datalist.appendChild(opt);
+  // Persist custom vendors
+  saveCustomVendors();
+}
+
+function getVendorList() {
+  var base = ['IMP','FHC','M3','DFG','WF','Sky','CMI'];
+  try {
+    var saved = localStorage.getItem('eg_custom_vendors');
+    if (saved) base = base.concat(JSON.parse(saved));
+  } catch(e) {}
+  // Also add vendors from existing orders
+  orders.forEach(function(o) {
+    if (o.vendor && base.indexOf(o.vendor) === -1) base.push(o.vendor);
+  });
+  return [...new Set(base)];
+}
+
+function saveCustomVendors() {
+  var datalist = document.getElementById('vendor-list');
+  var base = ['IMP','FHC','M3','DFG','WF','Sky','CMI'];
+  var custom = [];
+  datalist.querySelectorAll('option').forEach(function(opt) {
+    if (base.indexOf(opt.value) === -1) custom.push(opt.value);
+  });
+  try { localStorage.setItem('eg_custom_vendors', JSON.stringify(custom)); } catch(e) {}
+}
+
+function rebuildVendorDatalist() {
+  var datalist = document.getElementById('vendor-list');
+  if (!datalist) return;
+  var vendors = getVendorList();
+  datalist.innerHTML = vendors.map(function(v) { return '<option value="' + escHtml(v) + '">'; }).join('');
+}
+
 function clearForm() {
-  ['f_po','f_customer','f_address','f_jobtype','f_vendor_wo','f_amount','f_invoice_num'].forEach(function(id) { document.getElementById(id).value = ''; });
+  ['f_po','f_customer','f_address','f_jobtype','f_vendor','f_vendor_wo','f_amount','f_invoice_num'].forEach(function(id) { document.getElementById(id).value = ''; });
   ['f_order_date','f_expected_date','f_invoice_date','f_due_date','f_completion_date'].forEach(function(id) { document.getElementById(id).value = ''; });
   document.getElementById('f_status').value = 'open'; document.getElementById('f_division').value = 'Residential';
   document.getElementById('extractedForm').classList.remove('visible'); document.getElementById('lineItemsSection').style.display = 'none'; document.getElementById('fileInput').value = '';
@@ -560,6 +831,9 @@ function renderVendors(){
 // ═══ MODAL ═══
 function openModal(idx){
   activeOrderIdx=idx;const o=orders[idx];const status=normalizeStatus(o.status);const div=o.division||'Residential';
+  // Rebuild modal vendor datalist
+  var mdl=document.getElementById('vendor-list-modal');
+  if(mdl){var vl=getVendorList();mdl.innerHTML=vl.map(function(v){return'<option value="'+escHtml(v)+'">';}).join('');}
   document.getElementById('modalTitle').textContent=(o.po||'Order')+' — '+(o.customer||'');
   document.getElementById('modalSub').textContent=(o.vendor||'')+' · '+div+(o.address?' · '+o.address:'');
   document.getElementById('modalOrderInfo').innerHTML=
@@ -569,7 +843,7 @@ function openModal(idx){
     '<div class="modal-row"><span>Division</span><select class="modal-input" id="me_division">'+['Residential','Commercial'].map(function(v){return'<option'+(div===v?' selected':'')+'>'+v+'</option>';}).join('')+'</select></div>'+
     '<div class="modal-row"><span>Job Type</span><input class="modal-input" id="me_jobtype" value="'+escHtml(o.jobtype||'')+'"></div>'+
     '<div class="modal-row"><span>Material</span><select class="modal-input" id="me_material">'+['glass','hardware','kit'].map(function(v){return'<option'+(o.material===v?' selected':'')+'>'+v+'</option>';}).join('')+'</select></div>'+
-    '<div class="modal-row"><span>Vendor</span><select class="modal-input" id="me_vendor">'+['IMP','FHC','M3','DFG','WF','Sky','SKY'].map(function(v){return'<option'+(o.vendor===v?' selected':'')+'>'+v+'</option>';}).join('')+'</select></div>'+
+    '<div class="modal-row"><span>Vendor</span><input class="modal-input" id="me_vendor" list="vendor-list-modal" value="'+escHtml(o.vendor||'')+'"></div>'+
     '<div class="modal-row"><span>Vendor WO #</span><input class="modal-input" id="me_vendor_wo" value="'+escHtml(o.vendor_wo||'')+'"></div>'+
     '<div class="modal-row"><span>Order Date</span><input class="modal-input" type="date" id="me_order_date" value="'+(o.order_date||'')+'"></div>'+
     '<div class="modal-row"><span>Expected Delivery</span><input class="modal-input" type="date" id="me_expected_date" value="'+(o.expected_date||'')+'"></div>'+
@@ -586,7 +860,7 @@ function openModal(idx){
 function closeModal(e,force){if(force||(e&&e.target===document.getElementById('modalOverlay'))){document.getElementById('modalOverlay').classList.remove('open');activeOrderIdx=null;}}
 function markPaid(){if(activeOrderIdx===null)return;orders[activeOrderIdx].status='paid';const s=document.getElementById('me_status');if(s)s.value='paid';saveOrders();renderAll();closeModal(null,true);showToast('Marked as paid');}
 function deleteOrder(){if(activeOrderIdx===null)return;if(!confirm('Delete this order?'))return;orders.splice(activeOrderIdx,1);saveOrders();renderAll();closeModal(null,true);showToast('Order deleted');}
-function saveModalChanges(){if(activeOrderIdx===null)return;const o=orders[activeOrderIdx];o.po=document.getElementById('me_po').value.trim();o.customer=document.getElementById('me_customer').value.trim();o.address=document.getElementById('me_address').value.trim();o.division=document.getElementById('me_division').value;o.jobtype=document.getElementById('me_jobtype').value.trim();o.material=document.getElementById('me_material').value;o.vendor=document.getElementById('me_vendor').value;o.vendor_wo=document.getElementById('me_vendor_wo').value.trim();o.order_date=document.getElementById('me_order_date').value;o.expected_date=document.getElementById('me_expected_date').value;o.completion_date=document.getElementById('me_completion_date').value;o.amount=parseFloat(document.getElementById('me_amount').value)||0;o.status=document.getElementById('me_status').value;o.invoice_num=document.getElementById('me_invoice_num').value.trim();o.invoice_date=document.getElementById('me_invoice_date').value;o.due_date=document.getElementById('me_due_date').value;saveOrders();renderAll();closeModal(null,true);showToast('Changes saved');}
+function saveModalChanges(){if(activeOrderIdx===null)return;const o=orders[activeOrderIdx];o.po=document.getElementById('me_po').value.trim();o.customer=document.getElementById('me_customer').value.trim();o.address=document.getElementById('me_address').value.trim();o.division=document.getElementById('me_division').value;o.jobtype=document.getElementById('me_jobtype').value.trim();o.material=document.getElementById('me_material').value;o.vendor=document.getElementById('me_vendor').value.trim();o.vendor_wo=document.getElementById('me_vendor_wo').value.trim();o.order_date=document.getElementById('me_order_date').value;o.expected_date=document.getElementById('me_expected_date').value;o.completion_date=document.getElementById('me_completion_date').value;o.amount=parseFloat(document.getElementById('me_amount').value)||0;o.status=document.getElementById('me_status').value;o.invoice_num=document.getElementById('me_invoice_num').value.trim();o.invoice_date=document.getElementById('me_invoice_date').value;o.due_date=document.getElementById('me_due_date').value;if(o.vendor)addVendorToDatalist(o.vendor);saveOrders();renderAll();closeModal(null,true);showToast('Changes saved');}
 
 // ═══ CSV EXPORT ═══
 function exportToExcel(){const headers=['EG PO','Customer','Address','Division','Job Type','Material','Vendor','Vendor WO','Order Date','Expected Date','Completion Date','Amount','Invoice #','Invoice Date','Due Date','Status'];const rows=(filteredOrders.length>0?filteredOrders:orders).map(function(o){return[o.po||'',o.customer||'',o.address||'',o.division||'',o.jobtype||'',o.material||'',o.vendor||'',o.vendor_wo||'',o.order_date||'',o.expected_date||'',o.completion_date||'',o.amount||'',o.invoice_num||'',o.invoice_date||'',o.due_date||'',normalizeStatus(o.status)];});const csv=[headers].concat(rows).map(function(r){return r.map(function(v){return'"'+String(v).replace(/"/g,'""')+'"';}).join(',');}).join('\n');const blob=new Blob([csv],{type:'text/csv'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='eridion-orders-'+new Date().toISOString().slice(0,10)+'.csv';a.click();URL.revokeObjectURL(url);showToast('Exported - open in Excel');}
@@ -640,6 +914,311 @@ async function checkMondayReport(){
   }catch(e){console.log('Monday report not available:',e.message);}
 }
 
+// ═══════════════════════════════════════════════════════
+// ORDER CLEANUP — Dedup + Merge related docs
+// ═══════════════════════════════════════════════════════
+
+let _cleanupGroups = [];
+
+function showCleanup() {
+  document.getElementById('cleanupOverlay').classList.add('open');
+  document.getElementById('cleanup-scanning').style.display = 'block';
+  document.getElementById('cleanup-summary').style.display = 'none';
+  document.getElementById('cleanup-groups').innerHTML = '';
+  document.getElementById('cleanup-empty').style.display = 'none';
+  document.getElementById('cleanup-merge-all-btn').style.display = 'none';
+
+  setTimeout(function() { runCleanupScan(); }, 300);
+}
+
+function closeCleanup(e, force) {
+  if (force || (e && e.target === document.getElementById('cleanupOverlay')))
+    document.getElementById('cleanupOverlay').classList.remove('open');
+}
+
+function runCleanupScan() {
+  _cleanupGroups = [];
+  var used = new Set(); // track order IDs already grouped
+
+  // ── Pass 1: Exact duplicates (same PO# + same vendor) ──
+  for (var i = 0; i < orders.length; i++) {
+    if (used.has(orders[i].id)) continue;
+    var o = orders[i];
+    if (!o.po) continue;
+    var group = [o];
+    for (var j = i + 1; j < orders.length; j++) {
+      if (used.has(orders[j].id)) continue;
+      var c = orders[j];
+      if (c.po && c.po.trim().toLowerCase() === o.po.trim().toLowerCase() &&
+          (!c.vendor || !o.vendor || c.vendor.trim().toLowerCase() === o.vendor.trim().toLowerCase())) {
+        group.push(c);
+        used.add(c.id);
+      }
+    }
+    if (group.length > 1) {
+      used.add(o.id);
+      _cleanupGroups.push({ type: 'duplicate', reason: 'Same PO#: ' + o.po, orders: group });
+    }
+  }
+
+  // ── Pass 2: Same vendor WO# ──
+  for (var i2 = 0; i2 < orders.length; i2++) {
+    if (used.has(orders[i2].id)) continue;
+    var o2 = orders[i2];
+    if (!o2.vendor_wo) continue;
+    var group2 = [o2];
+    for (var j2 = i2 + 1; j2 < orders.length; j2++) {
+      if (used.has(orders[j2].id)) continue;
+      var c2 = orders[j2];
+      if (c2.vendor_wo && c2.vendor_wo.trim().toLowerCase() === o2.vendor_wo.trim().toLowerCase()) {
+        group2.push(c2);
+        used.add(c2.id);
+      }
+    }
+    if (group2.length > 1) {
+      used.add(o2.id);
+      _cleanupGroups.push({ type: 'duplicate', reason: 'Same Vendor WO#: ' + o2.vendor_wo, orders: group2 });
+    }
+  }
+
+  // ── Pass 3: Same vendor + same amount (within $2) — likely PO/SO/Invoice for same job ──
+  for (var i3 = 0; i3 < orders.length; i3++) {
+    if (used.has(orders[i3].id)) continue;
+    var o3 = orders[i3];
+    if (!o3.vendor || !o3.amount) continue;
+    var group3 = [o3];
+    for (var j3 = i3 + 1; j3 < orders.length; j3++) {
+      if (used.has(orders[j3].id)) continue;
+      var c3 = orders[j3];
+      if (c3.vendor && c3.amount &&
+          c3.vendor.trim().toLowerCase() === o3.vendor.trim().toLowerCase() &&
+          Math.abs(c3.amount - o3.amount) <= 2) {
+        group3.push(c3);
+        used.add(c3.id);
+      }
+    }
+    if (group3.length > 1) {
+      used.add(o3.id);
+      _cleanupGroups.push({ type: 'related', reason: o3.vendor + ' · $' + o3.amount.toFixed(2) + ' — likely same job', orders: group3 });
+    }
+  }
+
+  // ── Pass 4: Same vendor + same address (fuzzy) — different docs for same job ──
+  for (var i4 = 0; i4 < orders.length; i4++) {
+    if (used.has(orders[i4].id)) continue;
+    var o4 = orders[i4];
+    if (!o4.vendor || !o4.address) continue;
+    var addr4 = normalizeAddress(o4.address);
+    if (!addr4) continue;
+    var group4 = [o4];
+    for (var j4 = i4 + 1; j4 < orders.length; j4++) {
+      if (used.has(orders[j4].id)) continue;
+      var c4 = orders[j4];
+      if (c4.vendor && c4.address &&
+          c4.vendor.trim().toLowerCase() === o4.vendor.trim().toLowerCase() &&
+          normalizeAddress(c4.address) === addr4) {
+        group4.push(c4);
+        used.add(c4.id);
+      }
+    }
+    if (group4.length > 1) {
+      used.add(o4.id);
+      _cleanupGroups.push({ type: 'related', reason: o4.vendor + ' · ' + o4.address + ' — same job address', orders: group4 });
+    }
+  }
+
+  // Count clean orders
+  var groupedIds = new Set();
+  _cleanupGroups.forEach(function(g) { g.orders.forEach(function(o) { groupedIds.add(o.id); }); });
+  var cleanCount = orders.length - groupedIds.size;
+  var dupeCount = _cleanupGroups.filter(function(g) { return g.type === 'duplicate'; }).length;
+  var relatedCount = _cleanupGroups.filter(function(g) { return g.type === 'related'; }).length;
+
+  // Update UI
+  document.getElementById('cleanup-scanning').style.display = 'none';
+  document.getElementById('cleanup-dupes').textContent = dupeCount;
+  document.getElementById('cleanup-related').textContent = relatedCount;
+  document.getElementById('cleanup-clean').textContent = cleanCount;
+  document.getElementById('cleanup-summary').style.display = 'block';
+
+  if (_cleanupGroups.length === 0) {
+    document.getElementById('cleanup-empty').style.display = 'block';
+    return;
+  }
+
+  document.getElementById('cleanup-merge-all-btn').style.display = 'inline-block';
+  renderCleanupGroups();
+}
+
+function normalizeAddress(addr) {
+  if (!addr) return '';
+  // Strip common noise and normalize
+  return addr.trim().toLowerCase()
+    .replace(/[.,#]/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/\b(street|st|drive|dr|lane|ln|road|rd|boulevard|blvd|avenue|ave|court|ct|circle|cir|way|place|pl)\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function renderCleanupGroups() {
+  var html = '';
+  _cleanupGroups.forEach(function(group, gi) {
+    var isDupe = group.type === 'duplicate';
+    var borderColor = isDupe ? 'var(--accent2)' : 'var(--warn)';
+    var typeLabel = isDupe ? 'DUPLICATE' : 'MERGE CANDIDATES';
+
+    html += '<div id="cg-' + gi + '" style="background:var(--bg);border:1px solid var(--border);border-radius:10px;margin-bottom:12px;overflow:hidden;border-left:3px solid ' + borderColor + '">';
+    html += '<div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">';
+    html += '<div><span style="font-family:\'DM Mono\',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:' + borderColor + '">' + typeLabel + '</span>';
+    html += '<div style="font-size:13px;font-weight:500;margin-top:2px">' + escHtml(group.reason) + '</div>';
+    html += '<div style="font-size:11px;color:var(--muted)">' + group.orders.length + ' orders to merge into 1</div></div>';
+    html += '<div style="display:flex;gap:6px">';
+    html += '<button class="btn btn-primary" style="font-size:11px;padding:6px 14px" onclick="mergeGroup(' + gi + ')">Merge →</button>';
+    html += '<button class="btn btn-secondary" style="font-size:11px;padding:6px 14px" onclick="skipGroup(' + gi + ')">Skip</button>';
+    html += '</div></div>';
+
+    // Show each order in the group
+    group.orders.forEach(function(o, oi) {
+      var hasPO = o.po ? '✓' : '—';
+      var hasInv = o.invoice_num ? '✓' : '—';
+      var hasAddr = o.address ? '✓' : '—';
+      var hasDue = o.due_date ? '✓' : '—';
+      var status = normalizeStatus(o.status);
+
+      html += '<div style="padding:10px 16px;border-bottom:1px solid var(--border);font-size:12px;display:grid;grid-template-columns:40px 1fr 1fr 80px 80px 60px;gap:8px;align-items:center">';
+      html += '<div style="font-family:\'DM Mono\',monospace;font-size:10px;color:var(--muted)">#' + (oi + 1) + '</div>';
+      html += '<div>';
+      html += '<div style="font-weight:500">' + escHtml(o.po || o.vendor_wo || '(no PO)') + ' <span style="font-size:10px;background:var(--surface2);padding:1px 6px;border-radius:3px;color:var(--muted)">' + escHtml(o.vendor || '?') + '</span></div>';
+      html += '<div style="font-size:11px;color:var(--muted)">' + escHtml(o.customer || '') + (o.address ? ' · ' + escHtml(o.address) : '') + '</div>';
+      html += '</div>';
+      html += '<div style="font-size:11px;color:var(--muted)">';
+      html += 'PO: ' + hasPO + ' · Inv: ' + hasInv + ' · Addr: ' + hasAddr + ' · Due: ' + hasDue;
+      if (o.invoice_num) html += '<br>Inv#: <span style="color:var(--text)">' + escHtml(o.invoice_num) + '</span>';
+      if (o.due_date) html += ' · Due: <span style="color:var(--warn)">' + o.due_date + '</span>';
+      html += '</div>';
+      html += '<div style="font-family:\'DM Mono\',monospace;font-size:12px;">$' + (o.amount || 0).toFixed(2) + '</div>';
+      html += '<div><span class="status-pill status-' + status + '">' + status + '</span></div>';
+      html += '<div style="font-size:10px;color:var(--muted)">' + (o.order_date || o.added || '').substring(0, 10) + '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  });
+  document.getElementById('cleanup-groups').innerHTML = html;
+}
+
+function mergeGroup(gi) {
+  var group = _cleanupGroups[gi];
+  if (!group || !group.orders.length) return;
+
+  // Merge strategy: keep the most complete data from all orders
+  var merged = {};
+  var fields = ['po','customer','address','division','jobtype','material','vendor','vendor_wo',
+                'order_date','expected_date','completion_date','invoice_num','invoice_date',
+                'due_date','status','source','items_ordered','items_outstanding'];
+
+  // Start with the first order as base
+  var base = group.orders[0];
+  for (var k in base) merged[k] = base[k];
+
+  // Layer in data from subsequent orders — non-empty values win
+  for (var i = 1; i < group.orders.length; i++) {
+    var o = group.orders[i];
+    fields.forEach(function(f) {
+      if (o[f] && !merged[f]) merged[f] = o[f];
+      // For invoice fields, prefer the one that actually has invoice data
+      if (f === 'invoice_num' && o[f] && !base[f]) merged[f] = o[f];
+      if (f === 'invoice_date' && o[f] && !base[f]) merged[f] = o[f];
+      if (f === 'due_date' && o[f] && !base[f]) merged[f] = o[f];
+    });
+    // Keep the higher amount (invoice amount > estimate)
+    if (o.amount && (!merged.amount || o.amount > merged.amount)) {
+      merged.amount = o.amount;
+    }
+    // If any version is paid, mark as paid
+    if (normalizeStatus(o.status) === 'paid') merged.status = 'paid';
+  }
+
+  // Remove all orders in this group from the main list
+  var removeIds = new Set(group.orders.map(function(o) { return o.id; }));
+  orders = orders.filter(function(o) { return !removeIds.has(o.id); });
+
+  // Add the merged order at the top
+  merged.id = Date.now();
+  merged.merged = true;
+  merged.mergedFrom = group.orders.length;
+  orders.unshift(merged);
+
+  // Remove this group from cleanup list
+  var el = document.getElementById('cg-' + gi);
+  if (el) { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(function() { el.remove(); }, 300); }
+  _cleanupGroups[gi] = null;
+
+  saveOrders();
+  renderAll();
+  showToast('Merged ' + group.orders.length + ' orders into 1');
+  updateCleanupCounts();
+}
+
+function skipGroup(gi) {
+  var el = document.getElementById('cg-' + gi);
+  if (el) { el.style.opacity = '0.3'; }
+  _cleanupGroups[gi] = null;
+  updateCleanupCounts();
+}
+
+function mergeAllGroups() {
+  var count = 0;
+  for (var i = 0; i < _cleanupGroups.length; i++) {
+    if (_cleanupGroups[i]) {
+      var group = _cleanupGroups[i];
+      // Same merge logic as mergeGroup but without UI animation
+      var merged = {};
+      var fields = ['po','customer','address','division','jobtype','material','vendor','vendor_wo',
+                    'order_date','expected_date','completion_date','invoice_num','invoice_date',
+                    'due_date','status','source','items_ordered','items_outstanding'];
+      var base = group.orders[0];
+      for (var k in base) merged[k] = base[k];
+      for (var j = 1; j < group.orders.length; j++) {
+        var o = group.orders[j];
+        fields.forEach(function(f) { if (o[f] && !merged[f]) merged[f] = o[f]; });
+        if (o.amount && (!merged.amount || o.amount > merged.amount)) merged.amount = o.amount;
+        if (normalizeStatus(o.status) === 'paid') merged.status = 'paid';
+      }
+      var removeIds = new Set(group.orders.map(function(o2) { return o2.id; }));
+      orders = orders.filter(function(o3) { return !removeIds.has(o3.id); });
+      merged.id = Date.now() + i;
+      merged.merged = true;
+      merged.mergedFrom = group.orders.length;
+      orders.unshift(merged);
+      count++;
+    }
+  }
+  _cleanupGroups = [];
+  saveOrders();
+  renderAll();
+  document.getElementById('cleanup-groups').innerHTML = '';
+  document.getElementById('cleanup-merge-all-btn').style.display = 'none';
+  document.getElementById('cleanup-empty').style.display = 'block';
+  document.getElementById('cleanup-empty').innerHTML = '<div style="font-size:28px;margin-bottom:8px;">✓</div><div style="font-family:Syne,sans-serif;font-size:15px;font-weight:700;">Done!</div><div style="font-size:12px;color:var(--muted);margin-top:4px;">Merged ' + count + ' groups. Your order list is clean.</div>';
+  updateCleanupCounts();
+}
+
+function updateCleanupCounts() {
+  var remaining = _cleanupGroups.filter(function(g) { return g !== null; });
+  var dupes = remaining.filter(function(g) { return g.type === 'duplicate'; }).length;
+  var related = remaining.filter(function(g) { return g.type === 'related'; }).length;
+  document.getElementById('cleanup-dupes').textContent = dupes;
+  document.getElementById('cleanup-related').textContent = related;
+  document.getElementById('cleanup-clean').textContent = orders.length;
+  if (remaining.length === 0) {
+    document.getElementById('cleanup-merge-all-btn').style.display = 'none';
+    if (document.getElementById('cleanup-empty').style.display === 'none') {
+      document.getElementById('cleanup-empty').style.display = 'block';
+    }
+  }
+}
+
 // ═══ DRAG AND DROP ═══
 const dropZone=document.getElementById('dropZone');
 dropZone.addEventListener('dragover',function(e){e.preventDefault();dropZone.classList.add('dragging');});
@@ -651,7 +1230,7 @@ sgDropZone.addEventListener('dragleave',function(){sgDropZone.classList.remove('
 sgDropZone.addEventListener('drop',function(e){e.preventDefault();sgDropZone.classList.remove('dragging');const file=e.dataTransfer.files[0];if(file){document.getElementById('sgFileInput').files=e.dataTransfer.files;parseSGCSV(file);}});
 
 // ═══ INIT ═══
-loadOrders().then(function(){checkMondayReport();});
+loadOrders().then(function(){ rebuildVendorDatalist(); checkMondayReport(); });
 </script>
 </body>
 </html>
