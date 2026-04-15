@@ -538,8 +538,7 @@ function populateForm(data) {
   }
   if (jt) { document.getElementById('f_jobtype').value = jt; if (jt.toLowerCase().indexOf('hardware') !== -1 || jt.toLowerCase().indexOf('handle') !== -1) document.getElementById('f_material').value = 'hardware'; else document.getElementById('f_material').value = 'glass'; }
   if (cn) document.getElementById('f_customer').value = cn;
-  const docType = data.doc_type || '';
-  const badge = document.getElementById('docTypeBadge');
+  var badge = document.getElementById('docTypeBadge');
   if (docType === 'sales_order') { badge.textContent = 'Vendor calls this an invoice - treated as Sales Order'; badge.style.display = 'inline-block'; } else { badge.style.display = 'none'; }
   if (items.length > 0) {
     const sec = document.getElementById('lineItemsSection'); const container = document.getElementById('lineItemsContainer');
