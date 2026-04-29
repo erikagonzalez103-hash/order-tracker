@@ -769,27 +769,190 @@ function showSGImport() { sgParsedOrders=[]; document.getElementById('sgPreview'
 function closeSGModal(e,force) { if(force||(e&&e.target===document.getElementById('sgModalOverlay'))) document.getElementById('sgModalOverlay').classList.remove('open'); }
 function handleSGFile(event) { const file=event.target.files[0]; if(!file) return; parseSGCSV(file); }
 function parseSGCSV(file) {
-  document.getElementById('sgLoading').classList.add('visible'); document.getElementById('sgPreview').classList.remove('visible'); document.getElementById('sgImportBtn').style.display='none';
-  const reader=new FileReader();
-  reader.onload=function(e) {
+  document.getElementById('sgLoading').classList.add('visible');
+  document.getElementById('sgPreview').classList.remove('visible');
+  document.getElementById('sgImportBtn').style.display='none';
+  const reader = new FileReader();
+  reader.onload = function(e) {
     try {
-      const text=e.target.result; const lines=text.replace(/\r/g,'').split('\n');
-      const vendorMap={'fhc':'FHC','imperial glass':'IMP','imperial tempered':'IMP','sky building':'Sky','sky':'Sky','m3':'M3','dfg':'DFG','wf':'WF'};
-      let currentVendor=''; const parsed=[];
-      for(let i=0;i<lines.length;i++){
-        const line=lines[i].trim(); if(!line) continue;
-        const fields=parseCSVLine(lines[i]);
-        for(let col=0;col<=1;col++){ const cell=(fields[col]||'').trim(); if(cell.toLowerCase().startsWith('supplier :')|| cell.toLowerCase().startsWith('supplier:')){ const vName=cell.replace(/supplier\s*:\s*/i,'').trim().toLowerCase(); for(const k in vendorMap){ if(vName.indexOf(k)!==-1){currentVendor=vendorMap[k];break;}} if(!currentVendor) currentVendor=cell.replace(/supplier\s*:\s*/i,'').trim(); break;}}
-        const poField=(fields[1]||'').trim(); const divField=(fields[2]||'').trim(); const ownerField=(fields[3]||'').trim(); const orderedField=(fields[6]||'').trim(); const expectedField=(fields[7]||'').trim(); const itemsOrderedField=(fields[8]||'').trim(); const itemsOutstandingField=(fields[9]||'').trim(); const netTotalField=(fields[10]||'').trim();
-        if(poField&&(divField==='Residential'||divField==='Commercial')&&orderedField){ const po=parseOwnerField(ownerField); const amount=parseFloat((netTotalField||'0').replace(/[$,]/g,''))||0;
-          parsed.push({po:poField,vendor:currentVendor,customer:po.customer,address:po.address,division:divField,order_date:parseSGDate(orderedField),expected_date:parseSGDate(expectedField),amount:amount,items_ordered:parseInt(itemsOrderedField)||0,items_outstanding:parseInt(itemsOutstandingField)||0,status:'open',jobtype:'glass',material:'glass',source:'sg_import'});
+      const text = e.target.result;
+      // Parse the entire CSV respecting quoted multi-line fields (don't split on \n inside quotes)
+      const rows = parseCSV(text);
+      const vendorMap = {'fhc':'FHC','imperial glass':'IMP','imperial tempered':'IMP','sky building':'Sky','sky':'Sky','m3':'M3','dfg':'DFG','wf':'WF','waterfall':'WF','cmi':'CMI'};
+
+      // Find header row to auto-detect column positions
+      let header = null;
+      let headerIdx = -1;
+      for (let i = 0; i < rows.length; i++) {
+        const joined = rows[i].join('|').toLowerCase();
+        if (joined.indexOf('purchase id') !== -1 ||
+            (joined.indexOf('division') !== -1 && joined.indexOf('ordered') !== -1 && joined.indexOf('supplier') !== -1)) {
+          header = rows[i];
+          headerIdx = i;
+          break;
         }
       }
+
+      const findCol = function(needle) {
+        if (!header) return -1;
+        for (let c = 0; c < header.length; c++) {
+          if ((header[c] || '').toLowerCase().indexOf(needle) !== -1) return c;
+        }
+        return -1;
+      };
+
+      const colIdx = {};
+      colIdx.po = 1;  // Always col 1 in SG exports
+      colIdx.division = findCol('division');
+      colIdx.owner = findCol('owner');
+      colIdx.customer = findCol('customer');
+      colIdx.reference = findCol('reference');
+      colIdx.ordered = findCol('ordered');
+      colIdx.expected = findCol('expected');
+      colIdx.supplier = findCol('supplier');
+      colIdx.itemsOrdered = findCol('items ordered');
+      colIdx.itemsOutstanding = findCol('items outstanding');
+      colIdx.netTotal = findCol('net total');
+
+      // Fallback to default SG positions if no header found
+      if (!header) {
+        colIdx.division = 2; colIdx.owner = 3; colIdx.customer = 4; colIdx.reference = 5;
+        colIdx.ordered = 6; colIdx.expected = 7; colIdx.supplier = 8;
+        colIdx.itemsOrdered = 9; colIdx.itemsOutstanding = 10; colIdx.netTotal = 11;
+      }
+      const hasCustomerCol = colIdx.customer >= 0;
+
+      let currentVendor = '';
+      const parsed = [];
+      const startIdx = headerIdx >= 0 ? headerIdx + 1 : 0;
+
+      for (let i = startIdx; i < rows.length; i++) {
+        const fields = rows[i];
+        if (!fields || fields.every(function(f){ return !f || !String(f).trim(); })) continue;
+
+        // Old SG format: "Supplier:" prefix row sets vendor for following rows
+        for (let col = 0; col <= 1; col++) {
+          const cell = (fields[col] || '').trim();
+          if (cell.toLowerCase().startsWith('supplier :') || cell.toLowerCase().startsWith('supplier:')) {
+            const vName = cell.replace(/supplier\s*:\s*/i, '').trim().toLowerCase();
+            currentVendor = '';
+            for (const k in vendorMap) { if (vName.indexOf(k) !== -1) { currentVendor = vendorMap[k]; break; } }
+            if (!currentVendor) currentVendor = cell.replace(/supplier\s*:\s*/i, '').trim();
+            break;
+          }
+        }
+
+        // New SG format: Supplier is in its own column on every data row
+        const rowSupplierRaw = colIdx.supplier >= 0 ? (fields[colIdx.supplier] || '').trim() : '';
+        let rowVendor = currentVendor;
+        if (rowSupplierRaw) {
+          const sl = rowSupplierRaw.toLowerCase();
+          let mapped = '';
+          for (const k in vendorMap) { if (sl.indexOf(k) !== -1) { mapped = vendorMap[k]; break; } }
+          rowVendor = mapped || rowSupplierRaw;
+        }
+
+        let poRaw = (fields[colIdx.po] || '').trim();
+        let division = colIdx.division >= 0 ? (fields[colIdx.division] || '').trim() : '';
+
+        // Common SG quirk: Division text appended to PO# in col 1 ("26022-1 Residential")
+        if (!division && poRaw) {
+          const m = poRaw.match(/^(.+?)\s+(Residential|Commercial)\s*$/i);
+          if (m) {
+            poRaw = m[1].trim();
+            division = m[2].charAt(0).toUpperCase() + m[2].slice(1).toLowerCase();
+          }
+        }
+
+        const ordered = colIdx.ordered >= 0 ? (fields[colIdx.ordered] || '').trim() : '';
+        const expected = colIdx.expected >= 0 ? (fields[colIdx.expected] || '').trim() : '';
+        const itemsOrdered = colIdx.itemsOrdered >= 0 ? (fields[colIdx.itemsOrdered] || '').trim() : '';
+        const itemsOutstanding = colIdx.itemsOutstanding >= 0 ? (fields[colIdx.itemsOutstanding] || '').trim() : '';
+        const netTotal = colIdx.netTotal >= 0 ? (fields[colIdx.netTotal] || '').trim() : '';
+
+        // Gate: must have PO + ordered date + valid division
+        if (!poRaw || !ordered) continue;
+        if (division !== 'Residential' && division !== 'Commercial') continue;
+
+        // Customer + address resolution
+        let customer = '', address = '';
+        if (hasCustomerCol) {
+          customer = (fields[colIdx.customer] || '').trim();
+          // SG sometimes concatenates customer + address ("Amanda Beard Inte1051 Hope Valley")
+          const concatMatch = customer.match(/^(.+?[a-z])(\d{2,}\s+\S.*)$/i);
+          if (concatMatch) {
+            customer = concatMatch[1].trim();
+            address = concatMatch[2].trim();
+          }
+        }
+        if (colIdx.reference >= 0 && !address) {
+          const ref = (fields[colIdx.reference] || '').replace(/\s+/g, ' ').trim();
+          if (ref) address = ref;
+        }
+        // Old format only: owner field had owner + customer + address concatenated
+        if (!customer && !hasCustomerCol && colIdx.owner >= 0) {
+          const ownerField = (fields[colIdx.owner] || '').trim();
+          const po = parseOwnerField(ownerField);
+          customer = po.customer;
+          if (!address) address = po.address;
+        }
+
+        const amount = parseFloat((netTotal || '0').replace(/[$,\s]/g, '')) || 0;
+
+        parsed.push({
+          po: poRaw,
+          vendor: rowVendor,
+          customer: customer,
+          address: address,
+          division: division,
+          order_date: parseSGDate(ordered),
+          expected_date: parseSGDate(expected),
+          amount: amount,
+          items_ordered: parseInt(itemsOrdered) || 0,
+          items_outstanding: parseInt(itemsOutstanding) || 0,
+          status: 'open',
+          jobtype: 'glass',
+          material: 'glass',
+          source: 'sg_import'
+        });
+      }
+
       document.getElementById('sgLoading').classList.remove('visible');
-      if(parsed.length===0){showToast('No orders found');return;} sgParsedOrders=parsed; renderSGPreview(parsed);
-    } catch(err){document.getElementById('sgLoading').classList.remove('visible');showToast('Error: '+err.message);console.error(err);}
-  }; reader.readAsText(file);
+      if (parsed.length === 0) { showToast('No orders found - check that this is an SG Purchase Orders export'); return; }
+      sgParsedOrders = parsed;
+      renderSGPreview(parsed);
+    } catch(err) {
+      document.getElementById('sgLoading').classList.remove('visible');
+      showToast('Error: ' + err.message);
+      console.error('SG parse error:', err);
+    }
+  };
+  reader.readAsText(file);
 }
+// Full CSV parser: handles quoted fields with embedded commas, newlines, and escaped quotes
+function parseCSV(text) {
+  const rows = []; let row = []; let cur = ''; let inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQ) {
+      if (ch === '"') {
+        if (text[i+1] === '"') { cur += '"'; i++; }
+        else { inQ = false; }
+      } else { cur += ch; }
+    } else {
+      if (ch === '"') { inQ = true; }
+      else if (ch === ',') { row.push(cur); cur = ''; }
+      else if (ch === '\r') {
+        if (text[i+1] !== '\n') { row.push(cur); rows.push(row); row = []; cur = ''; }
+      }
+      else if (ch === '\n') { row.push(cur); rows.push(row); row = []; cur = ''; }
+      else { cur += ch; }
+    }
+  }
+  if (cur.length > 0 || row.length > 0) { row.push(cur); rows.push(row); }
+  return rows;
+}
+// Simple line-level CSV parser (kept for the Import/Export feature which works line-by-line)
 function parseCSVLine(line){const fields=[];let cur='',inQ=false;for(let j=0;j<line.length;j++){const ch=line[j];if(ch==='"')inQ=!inQ;else if(ch===','&&!inQ){fields.push(cur);cur='';}else cur+=ch;}fields.push(cur);return fields;}
 function parseOwnerField(raw){const s=raw.trim();const ownerPrefixes=['Dion Harrison','Dion Harris'];let remainder=s;for(var pi=0;pi<ownerPrefixes.length;pi++){if(s.toLowerCase().startsWith(ownerPrefixes[pi].toLowerCase())){remainder=s.substring(ownerPrefixes[pi].length).trim();break;}}const addrMatch=remainder.match(/^(.*?)\s{2,}(\d+\s+\S.*)$/)||remainder.match(/^(.*?)(\d{2,}\s+\S.*)$/);if(addrMatch)return{customer:addrMatch[1].trim(),address:addrMatch[2].trim()};const numIdx=remainder.search(/\s\d+\s/);if(numIdx!==-1)return{customer:remainder.substring(0,numIdx).trim(),address:remainder.substring(numIdx).trim()};return{customer:remainder,address:''};}
 function parseSGDate(d){if(!d)return'';const parts=d.split('/');if(parts.length===3)return parts[2]+'-'+parts[0].padStart(2,'0')+'-'+parts[1].padStart(2,'0');return'';}
