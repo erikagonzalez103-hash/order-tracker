@@ -333,6 +333,27 @@
   </div>
 </div>
 
+<!-- DUPLICATE / MERGE DIALOG -->
+<div class="modal-overlay" id="dupeModalOverlay" onclick="closeDupeDialog(event,false)">
+  <div class="modal" style="width:680px;max-width:95vw;">
+    <div class="modal-title">📎 Match Found</div>
+    <div class="modal-sub" id="dupeModalSub">This upload looks like it matches an existing order.</div>
+    <div class="modal-section">
+      <h4>Side-by-side</h4>
+      <div id="dupeCompareRows" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;overflow:hidden;"></div>
+    </div>
+    <div style="background:rgba(79,255,176,.05);border:1px solid rgba(79,255,176,.25);border-radius:8px;padding:12px 14px;margin-bottom:18px;font-size:12px;color:var(--text);line-height:1.55">
+      <strong style="color:var(--accent);font-family:'DM Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.5px">Recommended: Merge</strong><br>
+      <span style="color:var(--muted)">Adds the new info from this upload (like vendor SO#) into the existing order. Empty fields get filled in, your vendor WO# always updates, but data already on the order is preserved.</span>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="dupeMerge()">Merge into existing</button>
+      <button class="btn btn-secondary" onclick="dupeOverride()">Override existing</button>
+      <button class="btn btn-danger" onclick="dupeCancel()" style="margin-left:auto">Discard upload</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <!-- CLEANUP MODAL -->
@@ -499,11 +520,11 @@ function populateForm(data) {
   if (dupeMatch.exact) {
     const o = dupeMatch.order;
     const idx = orders.indexOf(o);
-    if (!confirm('⚠ This document may be a duplicate!\n\n' +
-      'Existing order found:\n' +
-      'PO: ' + (o.po || '-') + '  |  Vendor: ' + (o.vendor || '-') + '  |  $' + (o.amount || 0).toFixed(2) + '\n' +
+    if (!confirm('📎 Match found — this document looks like an existing order.\n\n' +
+      'Existing: PO ' + (o.po || '-') + '  |  ' + (o.vendor || '-') + '  |  $' + (o.amount || 0).toFixed(2) + '\n' +
       'Match reason: ' + dupeMatch.reason + '\n\n' +
-      '• OK = Load into form anyway (you can review before saving)\n• Cancel = Discard this scan')) {
+      'OK  = Load into form. When you Save, you can pick Merge / Override / Discard.\n' +
+      'Cancel = Discard this scan now.')) {
       showToast('Scan cancelled');
       return;
     }
@@ -569,21 +590,13 @@ function saveOrder() {
   // ═══ DUPLICATE DETECTION ═══
   const match = findMatchingOrder(po, vendor_wo, vendor, amount);
   if (match.exact) {
-    // Exact duplicate found
-    const o = match.order;
-    const idx = orders.indexOf(o);
-    if (!confirm('⚠ Duplicate detected!\n\nThis looks like an order that already exists:\n' +
-      'PO: ' + (o.po || '-') + '  |  Vendor: ' + (o.vendor || '-') + '  |  $' + (o.amount || 0).toFixed(2) + '\n\n' +
-      'Do you want to UPDATE the existing order with this new data?\n\n' +
-      '• OK = Override existing order\n• Cancel = Discard this upload')) {
-      showToast('Upload cancelled — existing order unchanged');
-      return;
-    }
-    // Override: update the existing order with form data
-    updateOrderFromForm(o);
-    saveOrders(); renderAll(); clearForm();
-    showToast('Existing order updated');
-    setTimeout(function() { openModal(idx); }, 500);
+    // Open merge dialog instead of OS confirm — user picks Merge / Override / Discard
+    _pendingDupe = {
+      newOrder: buildOrderFromForm(),
+      existingIdx: orders.indexOf(match.order),
+      reason: match.reason
+    };
+    showDupeDialog(match.order, _pendingDupe.newOrder, match.reason);
     return;
   }
 
@@ -591,6 +604,109 @@ function saveOrder() {
   const order = buildOrderFromForm();
   orders.unshift(order); saveOrders(); renderAll(); clearForm(); showToast('Order saved');
   setTimeout(function() { switchTab('orders'); }, 800);
+}
+
+// ═══ DUPLICATE / MERGE DIALOG ═══
+let _pendingDupe = null;
+
+function showDupeDialog(existing, incoming, reason) {
+  document.getElementById('dupeModalSub').textContent = 'Match reason: ' + reason;
+
+  // Build a side-by-side comparison of fields that differ or where new adds info
+  const labels = {
+    po: 'PO #', vendor_wo: 'Vendor WO #', vendor: 'Vendor', customer: 'Customer',
+    address: 'Address', division: 'Division', jobtype: 'Job Type', material: 'Material',
+    order_date: 'Order Date', expected_date: 'Expected', completion_date: 'Completion',
+    amount: 'Amount', invoice_num: 'Invoice #', invoice_date: 'Invoice Date',
+    due_date: 'Due Date', status: 'Status'
+  };
+
+  let html = '<div style="display:grid;grid-template-columns:130px 1fr 1fr;font-family:\'DM Mono\',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface2)">';
+  html += '<div></div><div>Existing</div><div>From this upload</div></div>';
+
+  Object.keys(labels).forEach(function(field) {
+    const e = formatFieldValue(existing[field], field);
+    const n = formatFieldValue(incoming[field], field);
+    if (!e && !n) return;
+    const isNewInfo = !e && n;          // existing empty, new has data → green (will fill)
+    const isDifferent = e && n && e !== n; // both have data, different → yellow (won't change in merge)
+    const isWoUpdate = field === 'vendor_wo' && n;  // vendor_wo always updates
+    const newColor = isWoUpdate ? 'var(--accent)' : isNewInfo ? 'var(--accent)' : isDifferent ? 'var(--warn)' : 'var(--text)';
+    const tag = isWoUpdate && e !== n ? ' <span style="font-family:\'DM Mono\',monospace;font-size:9px;background:rgba(79,255,176,.15);color:var(--accent);padding:1px 5px;border-radius:3px;margin-left:4px">will update</span>' :
+                isNewInfo ? ' <span style="font-family:\'DM Mono\',monospace;font-size:9px;background:rgba(79,255,176,.15);color:var(--accent);padding:1px 5px;border-radius:3px;margin-left:4px">will fill</span>' :
+                isDifferent ? ' <span style="font-family:\'DM Mono\',monospace;font-size:9px;background:rgba(251,191,36,.15);color:var(--warn);padding:1px 5px;border-radius:3px;margin-left:4px">keeps existing</span>' : '';
+    html += '<div style="display:grid;grid-template-columns:130px 1fr 1fr;padding:8px 14px;border-bottom:1px solid var(--border);font-size:12px;align-items:center">';
+    html += '<div style="color:var(--muted);font-family:\'DM Mono\',monospace;font-size:11px">' + labels[field] + '</div>';
+    html += '<div style="color:' + (e ? 'var(--text)' : 'var(--muted)') + '">' + (e ? escHtml(e) : '—') + '</div>';
+    html += '<div style="color:' + newColor + '">' + (n ? escHtml(n) : '—') + tag + '</div>';
+    html += '</div>';
+  });
+
+  document.getElementById('dupeCompareRows').innerHTML = html;
+  document.getElementById('dupeModalOverlay').classList.add('open');
+}
+
+function formatFieldValue(v, field) {
+  if (v === undefined || v === null || v === '') return '';
+  if (field === 'amount') return '$' + parseFloat(v).toFixed(2);
+  return String(v);
+}
+
+function closeDupeDialog(e, force) {
+  if (force || (e && e.target === document.getElementById('dupeModalOverlay'))) {
+    document.getElementById('dupeModalOverlay').classList.remove('open');
+  }
+}
+
+function dupeMerge() {
+  if (!_pendingDupe) return;
+  const o = orders[_pendingDupe.existingIdx];
+  const n = _pendingDupe.newOrder;
+
+  // Fill empty fields from new data; preserve any value the existing order already has
+  const fillFields = ['po','customer','address','division','jobtype','material','vendor',
+                      'order_date','expected_date','completion_date','invoice_num',
+                      'invoice_date','due_date'];
+  fillFields.forEach(function(f) {
+    if (!o[f] && n[f]) o[f] = n[f];
+  });
+
+  // vendor_wo: always take new value if provided (this is usually the new info from the SO)
+  if (n.vendor_wo) o.vendor_wo = n.vendor_wo;
+
+  // amount: only update if existing was 0/empty
+  if (n.amount && !o.amount) o.amount = n.amount;
+
+  // Don't change status — preserve paid/open
+  // Track that this was merged
+  o.merged = true;
+  o.last_merged_at = new Date().toISOString();
+
+  closeDupeDialog(null, true);
+  saveOrders(); renderAll(); clearForm();
+  showToast('Merged — existing order updated with new info');
+  const idx = _pendingDupe.existingIdx;
+  _pendingDupe = null;
+  setTimeout(function() { openModal(idx); }, 500);
+}
+
+function dupeOverride() {
+  if (!_pendingDupe) return;
+  const o = orders[_pendingDupe.existingIdx];
+  updateOrderFromForm(o);
+
+  closeDupeDialog(null, true);
+  saveOrders(); renderAll(); clearForm();
+  showToast('Existing order overridden');
+  const idx = _pendingDupe.existingIdx;
+  _pendingDupe = null;
+  setTimeout(function() { openModal(idx); }, 500);
+}
+
+function dupeCancel() {
+  closeDupeDialog(null, true);
+  _pendingDupe = null;
+  showToast('Upload discarded — existing order unchanged');
 }
 
 function buildOrderFromForm() {
