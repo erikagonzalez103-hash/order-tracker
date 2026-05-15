@@ -292,10 +292,47 @@
   </div>
 </div>
 
+<!-- DUPLICATE RESOLUTION MODAL -->
+<div class="modal-overlay" id="dupeModalOverlay" onclick="closeDupeModal(event)">
+  <div class="modal" style="width:640px;max-width:95vw">
+    <div class="modal-title">⚠ Possible Duplicate Detected</div>
+    <div class="modal-sub" id="dupeReason">Match reason: —</div>
+    <div class="modal-section">
+      <h4>Existing Order</h4>
+      <div id="dupeExisting" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12px;line-height:1.7"></div>
+    </div>
+    <div class="modal-section">
+      <h4>New Data You're Adding</h4>
+      <div id="dupeNew" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12px;line-height:1.7"></div>
+    </div>
+    <div class="modal-section">
+      <h4>What would you like to do?</h4>
+      <div style="display:grid;gap:8px">
+        <button onclick="dupeAction('merge')" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:12px 16px;text-align:left;cursor:pointer;font-family:'DM Sans',sans-serif;transition:filter .15s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='none'">
+          <div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;margin-bottom:3px">🔗 Merge into existing order</div>
+          <div style="font-size:11px;opacity:.8">Fill in missing fields and update invoice info. Best when adding an invoice to an existing sales order, or completing a partial record.</div>
+        </button>
+        <button onclick="dupeAction('override')" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:12px 16px;text-align:left;cursor:pointer;font-family:'DM Sans',sans-serif" onmouseover="this.style.borderColor='var(--warn)'" onmouseout="this.style.borderColor='var(--border)'">
+          <div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;margin-bottom:3px;color:var(--warn)">✎ Override existing order</div>
+          <div style="font-size:11px;color:var(--muted)">Replace existing fields with new values where the new data has something. Use for corrections.</div>
+        </button>
+        <button onclick="dupeAction('new')" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:12px 16px;text-align:left;cursor:pointer;font-family:'DM Sans',sans-serif" onmouseover="this.style.borderColor='var(--accent3)'" onmouseout="this.style.borderColor='var(--border)'">
+          <div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;margin-bottom:3px;color:var(--accent3)">＋ Save as separate new order</div>
+          <div style="font-size:11px;color:var(--muted)">Not a duplicate — these are different jobs that happen to look similar. Create a new record.</div>
+        </button>
+        <button onclick="dupeAction('cancel')" style="background:rgba(255,107,74,.1);color:var(--accent2);border:1px solid rgba(255,107,74,.3);border-radius:8px;padding:12px 16px;text-align:left;cursor:pointer;font-family:'DM Sans',sans-serif" onmouseover="this.style.background='rgba(255,107,74,.2)'" onmouseout="this.style.background='rgba(255,107,74,.1)'">
+          <div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;margin-bottom:3px">✕ Cancel — discard this upload</div>
+          <div style="font-size:11px;opacity:.8">Throw away the scanned data, leave existing order unchanged.</div>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- SG IMPORT MODAL -->
 <div class="modal-overlay" id="sgModalOverlay" onclick="closeSGModal(event)">
   <div class="modal" style="width:680px;max-width:95vw;">
-    <div class="modal-title" style="display:flex;justify-content:space-between;align-items:center">⬆ Smart Glazier Import<button onclick="closeSGModal(null,true)" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:0;line-height:1" title="Close" aria-label="Close">✕</button></div>
+    <div class="modal-title">⬆ Smart Glazier Import</div>
     <div class="modal-sub">Drop your SG Purchase Orders CSV export to bulk-create orders. Duplicates are automatically skipped.</div>
     <div class="sg-drop-zone" id="sgDropZone">
       <input type="file" id="sgFileInput" accept=".csv" onchange="handleSGFile(event)">
@@ -306,7 +343,7 @@
     <div class="sg-preview" id="sgPreview"><div class="sg-preview-header"><span id="sgPreviewCount">0 orders found</span><span id="sgPreviewDupes" style="color:var(--warn);font-size:11px;"></span></div><div class="sg-preview-body"><div class="sg-preview-row header"><div>PO #</div><div>Vendor</div><div>Customer / Address</div><div>Amount</div><div>Status</div></div><div id="sgPreviewRows"></div></div></div>
     <div class="loading" id="sgLoading"><div class="spinner"></div><span>Parsing Smart Glazier export...</span></div>
     <div id="sgImportSummary" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:16px;font-size:13px;"></div>
-    <div class="modal-actions"><button class="btn btn-purple" id="sgImportBtn" onclick="doSGImport()" style="display:none">Import Orders</button><button class="btn btn-secondary" id="sgCloseBtn" onclick="closeSGModal(null,true)" style="margin-left:auto">Close</button></div>
+    <div class="modal-actions"><button class="btn btn-purple" id="sgImportBtn" onclick="doSGImport()" style="display:none">Import Orders</button><button class="btn btn-secondary" onclick="closeSGModal(null,true)" style="margin-left:auto">Cancel</button></div>
   </div>
 </div>
 
@@ -491,23 +528,13 @@ function populateForm(data) {
   }
 
   // ═══ CHECK: Is this a duplicate of an existing order? ═══
+  // Don't block — just stash the match info so save will surface the 4-option modal.
   const checkPO = data.customer_po || '';
   const checkWO = data.vendor_order_number || data.von || '';
   const checkVendor = data.vendor_name || data.vn || '';
   const checkAmt = data.amount_total || data.amt || 0;
   const dupeMatch = findMatchingOrder(checkPO, checkWO, checkVendor, checkAmt);
-  if (dupeMatch.exact) {
-    const o = dupeMatch.order;
-    const idx = orders.indexOf(o);
-    if (!confirm('⚠ This document may be a duplicate!\n\n' +
-      'Existing order found:\n' +
-      'PO: ' + (o.po || '-') + '  |  Vendor: ' + (o.vendor || '-') + '  |  $' + (o.amount || 0).toFixed(2) + '\n' +
-      'Match reason: ' + dupeMatch.reason + '\n\n' +
-      '• OK = Load into form anyway (you can review before saving)\n• Cancel = Discard this scan')) {
-      showToast('Scan cancelled');
-      return;
-    }
-  }
+  window._scanDupeHint = dupeMatch.exact ? dupeMatch.reason : null;
 
   const g = function(full, abbr) { return data[full] || data[abbr] || ''; };
   const vn = data.vendor_name || data.vn || '';
@@ -546,6 +573,21 @@ function populateForm(data) {
     container.innerHTML = items.map(function(li) { return '<div class="line-item"><div class="field"><input type="text" value="' + escHtml(li.description || li.d || '') + '" placeholder="Description"></div><div class="field"><input type="number" value="' + (li.qty || li.q || '') + '" placeholder="Qty"></div><div class="field"><input type="number" value="' + (li.rate || li.r || '') + '" placeholder="Rate"></div><div class="field"><input type="number" value="' + (li.amount || li.a || '') + '" placeholder="Amount"></div></div>'; }).join('');
   }
   document.getElementById('extractedForm').classList.add('visible');
+  // Show a subtle non-blocking hint if a possible duplicate was detected
+  var hintBadge = document.getElementById('dupeHintBadge');
+  if (window._scanDupeHint) {
+    if (!hintBadge) {
+      hintBadge = document.createElement('div');
+      hintBadge.id = 'dupeHintBadge';
+      hintBadge.style.cssText = 'background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.4);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--warn);display:flex;align-items:center;gap:8px;';
+      var form = document.getElementById('extractedForm');
+      form.insertBefore(hintBadge, form.firstChild.nextSibling);
+    }
+    hintBadge.innerHTML = '<span style="font-size:14px">⚠</span><span>Possible duplicate detected (<strong>' + escHtml(window._scanDupeHint) + '</strong>). You\'ll get merge/override/new options when you save.</span>';
+    hintBadge.style.display = 'flex';
+  } else if (hintBadge) {
+    hintBadge.style.display = 'none';
+  }
   showToast('Document scanned - review and save');
 }
 
@@ -560,7 +602,7 @@ function applyInvoiceToOrder(data) {
   saveOrders(); renderAll(); openModal(activeOrderIdx); showToast('Invoice data extracted and linked');
 }
 
-function saveOrder() {
+async function saveOrder() {
   const po = document.getElementById('f_po').value.trim();
   const vendor_wo = document.getElementById('f_vendor_wo').value.trim();
   const vendor = document.getElementById('f_vendor').value.trim();
@@ -569,21 +611,28 @@ function saveOrder() {
   // ═══ DUPLICATE DETECTION ═══
   const match = findMatchingOrder(po, vendor_wo, vendor, amount);
   if (match.exact) {
-    // Exact duplicate found
     const o = match.order;
     const idx = orders.indexOf(o);
-    if (!confirm('⚠ Duplicate detected!\n\nThis looks like an order that already exists:\n' +
-      'PO: ' + (o.po || '-') + '  |  Vendor: ' + (o.vendor || '-') + '  |  $' + (o.amount || 0).toFixed(2) + '\n\n' +
-      'Do you want to UPDATE the existing order with this new data?\n\n' +
-      '• OK = Override existing order\n• Cancel = Discard this upload')) {
-      showToast('Upload cancelled — existing order unchanged');
-      return;
+    const formOrder = buildOrderFromForm();
+    const action = await showDupeModal(o, match.reason, formOrder);
+
+    if (action === 'merge') {
+      mergeOrderData(o, formOrder);
+      saveOrders(); renderAll(); clearForm();
+      showToast('Merged into existing order');
+      setTimeout(function() { openModal(idx); }, 500);
+    } else if (action === 'override') {
+      updateOrderFromForm(o);
+      saveOrders(); renderAll(); clearForm();
+      showToast('Existing order overridden');
+      setTimeout(function() { openModal(idx); }, 500);
+    } else if (action === 'new') {
+      orders.unshift(formOrder); saveOrders(); renderAll(); clearForm();
+      showToast('Saved as separate new order');
+      setTimeout(function() { switchTab('orders'); }, 800);
+    } else {
+      showToast('Cancelled — nothing changed');
     }
-    // Override: update the existing order with form data
-    updateOrderFromForm(o);
-    saveOrders(); renderAll(); clearForm();
-    showToast('Existing order updated');
-    setTimeout(function() { openModal(idx); }, 500);
     return;
   }
 
@@ -591,6 +640,66 @@ function saveOrder() {
   const order = buildOrderFromForm();
   orders.unshift(order); saveOrders(); renderAll(); clearForm(); showToast('Order saved');
   setTimeout(function() { switchTab('orders'); }, 800);
+}
+
+// ═══ DUPLICATE RESOLUTION MODAL ═══
+let _dupeResolver = null;
+
+function showDupeModal(existingOrder, reason, newOrder) {
+  return new Promise(function(resolve) {
+    _dupeResolver = resolve;
+    document.getElementById('dupeReason').textContent = 'Match reason: ' + reason;
+
+    function summarize(o) {
+      var parts = [];
+      parts.push('<div><span style="color:var(--muted)">PO:</span> <strong>' + escHtml(o.po || '—') + '</strong> &nbsp;·&nbsp; <span style="color:var(--muted)">Vendor:</span> <strong>' + escHtml(o.vendor || '—') + '</strong></div>');
+      parts.push('<div><span style="color:var(--muted)">Customer:</span> ' + escHtml(o.customer || '—') + (o.address ? ' &nbsp;·&nbsp; <span style="color:var(--muted)">Address:</span> ' + escHtml(o.address) : '') + '</div>');
+      var line3 = '<span style="color:var(--muted)">Amount:</span> <strong>$' + (o.amount || 0).toFixed(2) + '</strong>';
+      if (o.vendor_wo) line3 += ' &nbsp;·&nbsp; <span style="color:var(--muted)">WO#:</span> ' + escHtml(o.vendor_wo);
+      if (o.invoice_num) line3 += ' &nbsp;·&nbsp; <span style="color:var(--muted)">Invoice:</span> <strong style="color:var(--accent3)">' + escHtml(o.invoice_num) + '</strong>';
+      if (o.due_date) line3 += ' &nbsp;·&nbsp; <span style="color:var(--muted)">Due:</span> <strong style="color:var(--warn)">' + o.due_date + '</strong>';
+      parts.push('<div>' + line3 + '</div>');
+      if (o.added) parts.push('<div style="color:var(--muted);font-size:11px;margin-top:4px">Status: ' + normalizeStatus(o.status) + ' &nbsp;·&nbsp; Added ' + (o.added || '').substring(0,10) + '</div>');
+      return parts.join('');
+    }
+
+    document.getElementById('dupeExisting').innerHTML = summarize(existingOrder);
+    document.getElementById('dupeNew').innerHTML = summarize(newOrder);
+    document.getElementById('dupeModalOverlay').classList.add('open');
+  });
+}
+
+function closeDupeModal(e, force) {
+  if (force || (e && e.target === document.getElementById('dupeModalOverlay'))) {
+    document.getElementById('dupeModalOverlay').classList.remove('open');
+    if (_dupeResolver) { _dupeResolver('cancel'); _dupeResolver = null; }
+  }
+}
+
+function dupeAction(action) {
+  document.getElementById('dupeModalOverlay').classList.remove('open');
+  if (_dupeResolver) { _dupeResolver(action); _dupeResolver = null; }
+}
+
+// MERGE: existing wins on conflict, but fills empty fields with new data and ALWAYS takes new invoice/due info.
+// This is the "I have a sales order, here's the matching invoice" case.
+function mergeOrderData(existing, newData) {
+  var fields = ['po','customer','address','division','jobtype','material','vendor','vendor_wo','order_date','expected_date','completion_date'];
+  fields.forEach(function(f) {
+    if (!existing[f] && newData[f]) existing[f] = newData[f];
+  });
+  // Invoice fields — new wins if present (typical merge case: adding an invoice)
+  if (newData.invoice_num) existing.invoice_num = newData.invoice_num;
+  if (newData.invoice_date) existing.invoice_date = newData.invoice_date;
+  if (newData.due_date) existing.due_date = newData.due_date;
+  // Amount — use the larger value (invoice amount usually > estimate)
+  if (newData.amount && newData.amount > (existing.amount || 0)) {
+    existing.amount = newData.amount;
+  }
+  // If new data brought invoice info and existing wasn't paid, make sure it's marked open (payable)
+  if (newData.invoice_num && normalizeStatus(existing.status) !== 'paid') {
+    existing.status = 'open';
+  }
 }
 
 function buildOrderFromForm() {
@@ -762,10 +871,13 @@ function clearForm() {
   ['f_order_date','f_expected_date','f_invoice_date','f_due_date','f_completion_date'].forEach(function(id) { document.getElementById(id).value = ''; });
   document.getElementById('f_status').value = 'open'; document.getElementById('f_division').value = 'Residential';
   document.getElementById('extractedForm').classList.remove('visible'); document.getElementById('lineItemsSection').style.display = 'none'; document.getElementById('fileInput').value = '';
+  window._scanDupeHint = null;
+  var hintBadge = document.getElementById('dupeHintBadge');
+  if (hintBadge) hintBadge.style.display = 'none';
 }
 
 // ═══ SMART GLAZIER IMPORT ═══
-function showSGImport() { sgParsedOrders=[]; document.getElementById('sgPreview').classList.remove('visible'); document.getElementById('sgImportBtn').style.display='none'; document.getElementById('sgLoading').classList.remove('visible'); document.getElementById('sgImportSummary').style.display='none'; document.getElementById('sgFileInput').value=''; var cb=document.getElementById('sgCloseBtn'); if(cb){cb.textContent='Close';cb.classList.remove('btn-primary');cb.classList.add('btn-secondary');} document.getElementById('sgModalOverlay').classList.add('open'); }
+function showSGImport() { sgParsedOrders=[]; document.getElementById('sgPreview').classList.remove('visible'); document.getElementById('sgImportBtn').style.display='none'; document.getElementById('sgLoading').classList.remove('visible'); document.getElementById('sgImportSummary').style.display='none'; document.getElementById('sgFileInput').value=''; document.getElementById('sgModalOverlay').classList.add('open'); }
 function closeSGModal(e,force) { if(force||(e&&e.target===document.getElementById('sgModalOverlay'))) document.getElementById('sgModalOverlay').classList.remove('open'); }
 function handleSGFile(event) { const file=event.target.files[0]; if(!file) return; parseSGCSV(file); }
 function parseSGCSV(file) {
@@ -798,24 +910,7 @@ function renderSGPreview(parsed){
   let dupeCount=0;
   const rows=parsed.map(function(o){const isDupe=existingPOs.has((o.po||'').trim().toLowerCase());if(isDupe)dupeCount++;const itemsTag=o.items_outstanding===0?'<span class="items-outstanding items-received">Received</span>':o.items_outstanding<o.items_ordered?'<span class="items-outstanding items-partial">'+o.items_outstanding+' pending</span>':'<span class="items-outstanding items-pending">Not received</span>';return'<div class="sg-preview-row'+(isDupe?' sg-dupe':'')+'"><div style="font-family:\'DM Mono\',monospace;font-size:11px">'+escHtml(o.po)+'</div><div><span class="vendor-tag-sm">'+escHtml(o.vendor)+'</span></div><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escHtml(o.customer+(o.address?' — '+o.address:''))+'">'+escHtml(o.customer)+(o.address?'<span style="color:var(--muted);font-size:11px"> — '+escHtml(o.address)+'</span>':'')+'</div><div style="font-family:\'DM Mono\',monospace;font-size:11px">$'+(o.amount||0).toFixed(2)+'</div><div>'+(isDupe?'<span class="sg-dupe-tag">exists</span>':itemsTag)+'</div></div>';}).join('');
   document.getElementById('sgPreviewRows').innerHTML=rows;document.getElementById('sgPreviewCount').textContent=parsed.length+' orders found';document.getElementById('sgPreviewDupes').textContent=dupeCount>0?dupeCount+' already exist (will be skipped)':'';document.getElementById('sgPreview').classList.add('visible');
-  const newCount=parsed.length-dupeCount;
-  const summaryEl=document.getElementById('sgImportSummary');
-  const closeBtn=document.getElementById('sgCloseBtn');
-  if(newCount===0){
-    // Everything is already in the tracker — show a clear confirmation
-    summaryEl.style.display='block';
-    summaryEl.style.borderColor='var(--accent)';
-    summaryEl.style.background='rgba(79,255,176,.06)';
-    summaryEl.innerHTML='<div style="display:flex;align-items:center;gap:10px"><span style="font-size:22px;color:var(--accent)">✓</span><div><div style="font-family:Syne,sans-serif;font-size:14px;font-weight:700;color:var(--accent)">All '+parsed.length+' orders are already in your tracker</div><div style="font-size:12px;color:var(--muted);margin-top:2px">Nothing new to import. Your data is up to date — you can safely close this window.</div></div></div>';
-    document.getElementById('sgImportBtn').style.display='none';
-    if(closeBtn){closeBtn.textContent='Done';closeBtn.classList.remove('btn-secondary');closeBtn.classList.add('btn-primary');}
-    showToast('All orders already in tracker');
-  } else {
-    summaryEl.style.display='none';
-    document.getElementById('sgImportBtn').textContent='Import '+newCount+' New Orders';
-    document.getElementById('sgImportBtn').style.display='inline-block';
-    if(closeBtn){closeBtn.textContent='Close';closeBtn.classList.remove('btn-primary');closeBtn.classList.add('btn-secondary');}
-  }
+  const newCount=parsed.length-dupeCount;document.getElementById('sgImportBtn').textContent='Import '+newCount+' New Orders';document.getElementById('sgImportBtn').style.display=newCount>0?'inline-block':'none';if(newCount===0)showToast('All orders already exist');
 }
 function doSGImport(){if(!sgParsedOrders.length)return;const existingPOs=new Set(orders.map(function(o){return(o.po||'').trim().toLowerCase();}));let imported=0;sgParsedOrders.forEach(function(o){if(existingPOs.has((o.po||'').trim().toLowerCase()))return;orders.unshift({id:Date.now()+imported,po:o.po,customer:o.customer,address:o.address,division:o.division,jobtype:o.jobtype||'glass',material:o.material||'glass',vendor:o.vendor,vendor_wo:'',order_date:o.order_date,expected_date:o.expected_date,completion_date:'',amount:o.amount,invoice_num:'',invoice_date:'',due_date:'',status:'open',items_ordered:o.items_ordered,items_outstanding:o.items_outstanding,source:'sg_import',added:new Date().toISOString()});imported++;});saveOrders();renderAll();closeSGModal(null,true);showToast('Imported '+imported+' orders!');setTimeout(function(){switchTab('orders');},800);}
 
