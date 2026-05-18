@@ -332,13 +332,18 @@
 <!-- SG IMPORT MODAL -->
 <div class="modal-overlay" id="sgModalOverlay" onclick="closeSGModal(event)">
   <div class="modal" style="width:680px;max-width:95vw;">
+<<<<<<< Updated upstream
     <div class="modal-title">⬆ Smart Glazier Import</div>
     <div class="modal-sub">Drop your SG Purchase Orders CSV export to bulk-create orders. Duplicates are automatically skipped.</div>
+=======
+    <div class="modal-title" style="display:flex;justify-content:space-between;align-items:center">⬆ Smart Glazier Import<button onclick="closeSGModal(null,true)" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:0;line-height:1" title="Close" aria-label="Close">✕</button></div>
+    <div class="modal-sub">Drop your Smart Glazier Purchase Orders report (PDF or CSV) to bulk-create orders. AI extracts every row from PDF; CSV imports instantly. Duplicates are automatically skipped.</div>
+>>>>>>> Stashed changes
     <div class="sg-drop-zone" id="sgDropZone">
-      <input type="file" id="sgFileInput" accept=".csv" onchange="handleSGFile(event)">
+      <input type="file" id="sgFileInput" accept=".csv,.pdf" onchange="handleSGFile(event)">
       <div style="font-size:28px;margin-bottom:10px;">📊</div>
-      <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:4px;color:var(--accent4)">Drop SG CSV here or click to browse</div>
-      <div style="font-size:12px;color:var(--muted)">Export from Smart Glazier → Reports → Purchase Orders → Default</div>
+      <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:4px;color:var(--accent4)">Drop SG PDF or CSV here</div>
+      <div style="font-size:12px;color:var(--muted)">Print the Purchase Orders Default report as PDF — or export as CSV — and drop here. AI handles PDF; CSV imports instantly.</div>
     </div>
     <div class="sg-preview" id="sgPreview"><div class="sg-preview-header"><span id="sgPreviewCount">0 orders found</span><span id="sgPreviewDupes" style="color:var(--warn);font-size:11px;"></span></div><div class="sg-preview-body"><div class="sg-preview-row header"><div>PO #</div><div>Vendor</div><div>Customer / Address</div><div>Amount</div><div>Status</div></div><div id="sgPreviewRows"></div></div></div>
     <div class="loading" id="sgLoading"><div class="spinner"></div><span>Parsing Smart Glazier export...</span></div>
@@ -879,7 +884,99 @@ function clearForm() {
 // ═══ SMART GLAZIER IMPORT ═══
 function showSGImport() { sgParsedOrders=[]; document.getElementById('sgPreview').classList.remove('visible'); document.getElementById('sgImportBtn').style.display='none'; document.getElementById('sgLoading').classList.remove('visible'); document.getElementById('sgImportSummary').style.display='none'; document.getElementById('sgFileInput').value=''; document.getElementById('sgModalOverlay').classList.add('open'); }
 function closeSGModal(e,force) { if(force||(e&&e.target===document.getElementById('sgModalOverlay'))) document.getElementById('sgModalOverlay').classList.remove('open'); }
-function handleSGFile(event) { const file=event.target.files[0]; if(!file) return; parseSGCSV(file); }
+async function parseSGPDF(file) {
+  document.getElementById('sgLoading').classList.add('visible');
+  document.getElementById('sgPreview').classList.remove('visible');
+  document.getElementById('sgImportBtn').style.display='none';
+  // Update loading text for PDF (CSV path doesn't need this)
+  var loadingSpan = document.querySelector('#sgLoading span');
+  if (loadingSpan) loadingSpan.textContent = 'Reading PDF with AI — this can take 10-30 seconds...';
+
+  try {
+    const base64 = await fileToBase64(file);
+    const systemPrompt = 'You are extracting data from a Smart Glazier "Purchase Orders" tabular report. Extract EVERY row from EVERY page. The columns are: Purchase ID (e.g. "26022-2"), Division (Residential or Commercial), Owner (e.g. "Dion Harrison"), Customer (e.g. "Hines Homes" or "Grand Homes North Division"), Reference (e.g. "222 Abington" or "1011 Hackberry - Shower Glass" — usually a street address, sometimes with a job descriptor), Ordered date, Expected date, Items Ordered, Items Outstanding, Net Total, Gross Total. The report MAY be grouped by supplier (vendor) with section headers like "Supplier : FHC" or "Supplier : Imperial Glass". If supplier sections exist, assign each order to the correct supplier. If no supplier sections appear, leave vendor blank. Return ONLY valid JSON (no markdown fences, no commentary) in this exact shape: {"orders":[{"po":"","division":"Residential","customer":"","reference":"","ordered":"YYYY-MM-DD","expected":"YYYY-MM-DD","items_ordered":0,"items_outstanding":0,"net_total":0,"vendor":""}]}. Dates MUST be YYYY-MM-DD. net_total is a number (no $ or commas). Be thorough — do not skip any rows. Include rows even when amount is $0.';
+
+    const response = await fetch(WORKER_URL + '/api/messages', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-6',
+        max_tokens:16000,
+        system:systemPrompt,
+        messages:[{
+          role:'user',
+          content:[
+            { type:'document', source:{ type:'base64', media_type:'application/pdf', data:base64 }, citations:{ enabled:false } },
+            { type:'text', text:'Extract every purchase order row from this Smart Glazier report. Return the JSON only.' }
+          ]
+        }]
+      })
+    });
+
+    const apiResp = await response.json();
+    if (apiResp.error) throw new Error(apiResp.error.message || 'API error');
+    const textContent = (apiResp.content || []).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
+    const braceStart = textContent.indexOf('{');
+    if (braceStart === -1) throw new Error('No JSON found in AI response');
+    let depth=0, end=-1;
+    for (let i=braceStart; i<textContent.length; i++) {
+      if (textContent[i]==='{') depth++;
+      else if (textContent[i]==='}') { depth--; if (depth===0) { end=i; break; } }
+    }
+    const jsonStr = end !== -1 ? textContent.substring(braceStart, end+1) : textContent.substring(braceStart);
+    const parsed = JSON.parse(jsonStr);
+    if (!parsed.orders || !Array.isArray(parsed.orders)) throw new Error('No orders array in AI response');
+
+    // Map raw vendor strings to your short codes (same logic as CSV path)
+    const vendorMap = {'fhc':'FHC','imperial':'IMP','sky':'Sky','m3':'M3','dfg':'DFG','waterfall':'WF',' wf':'WF','cmi':'CMI'};
+    const mapVendor = function(raw){
+      if (!raw) return '';
+      const vl = raw.toLowerCase();
+      for (const k in vendorMap) { if (vl.indexOf(k) !== -1) return vendorMap[k]; }
+      return raw.trim();
+    };
+
+    const transformed = parsed.orders.map(function(o){
+      return {
+        po: (o.po || '').toString().trim(),
+        vendor: mapVendor(o.vendor || ''),
+        customer: (o.customer || '').trim(),
+        address: (o.reference || o.address || '').trim(),
+        division: o.division === 'Commercial' ? 'Commercial' : 'Residential',
+        order_date: o.ordered || o.order_date || '',
+        expected_date: o.expected || o.expected_date || '',
+        amount: parseFloat(o.net_total || o.amount || 0) || 0,
+        items_ordered: parseInt(o.items_ordered) || 0,
+        items_outstanding: parseInt(o.items_outstanding) || 0,
+        status:'open', jobtype:'glass', material:'glass', source:'sg_import'
+      };
+    }).filter(function(o){ return o.po; });
+
+    document.getElementById('sgLoading').classList.remove('visible');
+    if (loadingSpan) loadingSpan.textContent = 'Parsing Smart Glazier export...';
+
+    if (transformed.length === 0) { showToast('No orders found in PDF'); return; }
+    sgParsedOrders = transformed;
+    renderSGPreview(transformed);
+
+    // Warn if vendor is missing on any rows — user can fix in bulk after import
+    const missingVendor = transformed.filter(function(o){ return !o.vendor; }).length;
+    if (missingVendor > 0) {
+      setTimeout(function(){ showToast(missingVendor + ' orders have no vendor — you can set them after import'); }, 1200);
+    }
+  } catch (err) {
+    document.getElementById('sgLoading').classList.remove('visible');
+    if (loadingSpan) loadingSpan.textContent = 'Parsing Smart Glazier export...';
+    showToast('PDF parse failed: ' + (err.message || 'unknown error'));
+    console.error('SG PDF parse error:', err);
+  }
+}
+
+function handleSGFile(event) {
+  const file=event.target.files[0]; if(!file) return;
+  const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  if (isPdf) parseSGPDF(file); else parseSGCSV(file);
+}
 function parseSGCSV(file) {
   document.getElementById('sgLoading').classList.add('visible'); document.getElementById('sgPreview').classList.remove('visible'); document.getElementById('sgImportBtn').style.display='none';
   const reader=new FileReader();
@@ -1339,7 +1436,7 @@ dropZone.addEventListener('drop',function(e){e.preventDefault();dropZone.classLi
 const sgDropZone=document.getElementById('sgDropZone');
 sgDropZone.addEventListener('dragover',function(e){e.preventDefault();sgDropZone.classList.add('dragging');});
 sgDropZone.addEventListener('dragleave',function(){sgDropZone.classList.remove('dragging');});
-sgDropZone.addEventListener('drop',function(e){e.preventDefault();sgDropZone.classList.remove('dragging');const file=e.dataTransfer.files[0];if(file){document.getElementById('sgFileInput').files=e.dataTransfer.files;parseSGCSV(file);}});
+sgDropZone.addEventListener('drop',function(e){e.preventDefault();sgDropZone.classList.remove('dragging');const file=e.dataTransfer.files[0];if(file){document.getElementById('sgFileInput').files=e.dataTransfer.files;handleSGFile({target:{files:[file]}});}});
 
 // ═══ INIT ═══
 loadOrders().then(function(){ rebuildVendorDatalist(); checkMondayReport(); });
