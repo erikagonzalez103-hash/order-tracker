@@ -686,19 +686,29 @@ function dupeAction(action) {
   if (_dupeResolver) { _dupeResolver(action); _dupeResolver = null; }
 }
 
-// MERGE: existing wins on conflict, but fills empty fields with new data and ALWAYS takes new invoice/due info.
-// This is the "I have a sales order, here's the matching invoice" case.
+// MERGE: when a vendor's actual document (SO / OC / invoice) is matched to an SG-imported PO,
+// the vendor's document is authoritative for vendor-side facts.
+//   - Customer-side fields (PO#, customer, address, division, job type, material, vendor identity)
+//     come from SG and we only fill them if the existing record is empty — never overwrite.
+//   - Vendor-side fields (vendor WO#, the vendor's actual order date, their committed expected
+//     date, invoice info) come from the vendor's document and overwrite when present, because
+//     they ARE the real-world truth that should drive reports and the forecast.
+//   - Amount: the vendor's document wins outright when present. The SG amount is an estimate;
+//     the SO/OC/invoice carries the actual price (which can be higher OR lower).
 function mergeOrderData(existing, newData) {
-  var fields = ['po','customer','address','division','jobtype','material','vendor','vendor_wo','order_date','expected_date','completion_date'];
-  fields.forEach(function(f) {
+  // Customer-side / identity — fill empty only
+  var customerFields = ['po','customer','address','division','jobtype','material','vendor'];
+  customerFields.forEach(function(f) {
     if (!existing[f] && newData[f]) existing[f] = newData[f];
   });
-  // Invoice fields — new wins if present (typical merge case: adding an invoice)
-  if (newData.invoice_num) existing.invoice_num = newData.invoice_num;
-  if (newData.invoice_date) existing.invoice_date = newData.invoice_date;
-  if (newData.due_date) existing.due_date = newData.due_date;
-  // Amount — use the larger value (invoice amount usually > estimate)
-  if (newData.amount && newData.amount > (existing.amount || 0)) {
+  // Vendor-side — new wins when present
+  var vendorFields = ['vendor_wo','order_date','expected_date','completion_date',
+                      'invoice_num','invoice_date','due_date'];
+  vendorFields.forEach(function(f) {
+    if (newData[f]) existing[f] = newData[f];
+  });
+  // Amount — vendor doc wins outright (was: only if larger, which dropped lower-than-estimate prices)
+  if (newData.amount && newData.amount > 0) {
     existing.amount = newData.amount;
   }
   // If new data brought invoice info and existing wasn't paid, make sure it's marked open (payable)
@@ -809,11 +819,14 @@ function checkInvoiceLinking(data) {
     'Link this invoice to the existing order?\n\n' +
     '• OK = Link invoice to existing order\n• Cancel = Create as new order instead')) {
 
-    // Link invoice data to existing order
+    // Link invoice data to existing order. The invoice is the authoritative source of truth
+    // for the amount being billed — overwrite the SG-estimated amount so reports + forecasts
+    // reflect what's actually payable. (Was guarded by `!o.amount`, which dropped the real
+    // invoice amount for any SG-imported order, since SG always populates amount.)
     if (invoiceNum) o.invoice_num = invoiceNum;
     if (data.invoice_date || data.id) o.invoice_date = data.invoice_date || data.id;
     if (data.due_date || data.dd) o.due_date = data.due_date || data.dd;
-    if (amount > 0 && !o.amount) o.amount = amount;
+    if (amount > 0) o.amount = amount;
     o.status = 'open'; // Has an invoice now, so it's open/payable
 
     saveOrders(); renderAll(); clearForm();
