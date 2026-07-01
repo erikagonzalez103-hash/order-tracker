@@ -157,6 +157,25 @@
 </head>
 <body>
 
+<!-- ═══ ERIDION HQ NAV (Phase 1 shell — same strip on every Eridion app) ═══ -->
+<style>
+.hq-nav{background:#0D1B2A;border-bottom:1px solid rgba(255,255,255,.1);padding:0 1.5rem;display:flex;align-items:center;height:40px;gap:2px;overflow-x:auto;font-family:'DM Sans',system-ui,sans-serif;}
+.hq-nav-brand{font-size:11px;font-weight:700;letter-spacing:2px;color:#C8963E;margin-right:12px;white-space:nowrap;}
+.hq-nav-link{font-size:12px;font-weight:500;padding:5px 14px;border-radius:6px;color:rgba(255,255,255,.45);text-decoration:none;transition:all .2s;white-space:nowrap;}
+.hq-nav-link:hover{color:rgba(255,255,255,.8);background:rgba(255,255,255,.07);}
+.hq-nav-link.active{color:#fff;background:rgba(255,255,255,.13);}
+</style>
+<nav class="hq-nav">
+  <span class="hq-nav-brand">ERIDION HQ</span>
+  <a class="hq-nav-link" href="https://erikagonzalez103-hash.github.io/morning-brief/">☀ Today</a>
+  <a class="hq-nav-link active" href="./index.html">💼 Jobs</a>
+  <a class="hq-nav-link" href="https://erikagonzalez103-hash.github.io/eridion-ledger/">💰 Money</a>
+  <a class="hq-nav-link" href="https://erikagonzalez103-hash.github.io/crm/">📈 Grow</a>
+  <a class="hq-nav-link" href="https://erikagonzalez103-hash.github.io/eridion-snapshot/">📊 Snapshot</a>
+  <a class="hq-nav-link" href="https://erikagonzalez103-hash.github.io/morning-brief/processes.html">Processes</a>
+  <a class="hq-nav-link" href="https://erikagonzalez103-hash.github.io/morning-brief/francisco.html">💬 Francisco</a>
+</nav>
+
 <header>
   <div class="logo"><span style="color:#4fffb0;font-family:Syne,sans-serif;font-size:20px;font-weight:800;">ERIDION</span><span style="color:#fff;font-family:Syne,sans-serif;font-size:20px;font-weight:800;"> GLASS</span><span style="color:var(--muted);font-size:11px;font-family:'DM Mono',monospace;margin-left:10px;vertical-align:middle;">ORDER TRACKER</span></div>
   <nav>
@@ -199,7 +218,7 @@
         </div>
         <div class="form-grid">
           <div class="field"><label>EG PO / Job #</label><input type="text" id="f_po" placeholder="e.g. 23500-1"></div>
-          <div class="field"><label>Customer</label><input type="text" id="f_customer" placeholder="Builder name"></div>
+          <div class="field"><label>Customer</label><input type="text" id="f_customer" placeholder="Builder name" list="builder-list"><datalist id="builder-list"></datalist></div>
           <div class="field"><label>Job Address</label><input type="text" id="f_address" placeholder="123 Main St"></div>
           <div class="field"><label>Division</label><select id="f_division"><option value="Residential">Residential</option><option value="Commercial">Commercial</option></select></div>
           <div class="field"><label>Job Type</label><input type="text" id="f_jobtype" placeholder="showers, mirrors..."></div>
@@ -424,6 +443,69 @@ let activeOrderIdx = null;
 let filteredOrders = [];
 let sgParsedOrders = [];
 
+// ═══ SHARED REGISTRIES (Phase 1) ═══
+// Canonical vendors + builders come from the shared worker KV. The hardcoded
+// map below is only the offline fallback — the registry is the source of truth.
+let REG_VENDORS = null, REG_BUILDERS = null;
+const REG_ID_TO_SHORT = { imperial:'IMP', fhc:'FHC', m3:'M3', dfg:'DFG', waterfall:'WF', sky:'Sky', cmi:'CMI', zuritex:'Zuritex', citizens:'Citizens', 'smart-glazier':'Smart Glazier' };
+const VENDOR_SHORT_FALLBACK = { 'imperial':'IMP', 'fhc':'FHC', 'm3':'M3', 'dfg':'DFG', 'waterfall':'WF', 'sky':'Sky', 'cmi':'CMI' };
+
+// One matcher for every intake path (scan, SG PDF, SG CSV). Registry names +
+// aliases first; hardcoded fallback second. Short aliases (<4 chars) must match
+// as whole words so "IMP" can't fire on e.g. "Impact Glass".
+function matchVendorShort(rawName) {
+  if (!rawName) return null;
+  const vl = String(rawName).toLowerCase();
+  if (REG_VENDORS) {
+    for (const v of REG_VENDORS) {
+      const names = [v.name].concat(v.aliases || []);
+      for (const n of names) {
+        if (!n) continue;
+        const nl = String(n).toLowerCase();
+        const hit = nl.length >= 4 ? vl.indexOf(nl) !== -1 : new RegExp('\\b' + nl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').test(vl);
+        if (hit) return REG_ID_TO_SHORT[v.id] || v.name;
+      }
+    }
+  }
+  for (const k in VENDOR_SHORT_FALLBACK) { if (vl.indexOf(k) !== -1) return VENDOR_SHORT_FALLBACK[k]; }
+  return null;
+}
+
+async function loadRegistries() {
+  try {
+    const [rv, rb] = await Promise.all([
+      fetch(WORKER_URL + '/registry/vendors').then(r => r.json()),
+      fetch(WORKER_URL + '/registry/builders').then(r => r.json()),
+    ]);
+    if (rv && Array.isArray(rv.entries)) REG_VENDORS = rv.entries;
+    if (rb && Array.isArray(rb.entries)) REG_BUILDERS = rb.entries;
+  } catch (e) { /* offline — fallbacks stay in effect */ }
+  rebuildVendorDatalist();
+  rebuildBuilderDatalist();
+}
+
+function rebuildBuilderDatalist() {
+  const datalist = document.getElementById('builder-list');
+  if (!datalist) return;
+  const names = [];
+  if (REG_BUILDERS) REG_BUILDERS.forEach(function(b) { if (b.name && names.indexOf(b.name) === -1) names.push(b.name); });
+  orders.forEach(function(o) { if (o.customer && names.indexOf(o.customer) === -1) names.push(o.customer); });
+  datalist.innerHTML = names.map(function(n) { return '<option value="' + escHtml(n) + '">'; }).join('');
+}
+
+// Read the editable line-item rows back out of the scan form.
+function readLineItemsFromForm() {
+  const rows = document.querySelectorAll('#lineItemsContainer .line-item');
+  const items = [];
+  rows.forEach(function(row) {
+    const f = row.querySelectorAll('input');
+    if (f.length < 4) return;
+    const d = (f[0].value || '').trim(), q = parseFloat(f[1].value) || 0, r = parseFloat(f[2].value) || 0, a = parseFloat(f[3].value) || 0;
+    if (d || a) items.push({ description: d, qty: q, rate: r, amount: a });
+  });
+  return items;
+}
+
 // Storage
 async function storageGet(key) {
   try { if (window.storage && typeof window.storage.get === 'function') { const r = await window.storage.get(key); return r ? r.value : null; } } catch(e) {}
@@ -551,12 +633,10 @@ function populateForm(data) {
   document.getElementById('f_due_date').value = g('due_date','dd');
   document.getElementById('f_address').value = data.job_address || '';
   if (data.division) { const divEl = document.getElementById('f_division'); if (data.division.toLowerCase().indexOf('comm') !== -1) divEl.value = 'Commercial'; else divEl.value = 'Residential'; }
-  const vmap = { 'imperial': 'IMP', 'fhc': 'FHC', 'm3': 'M3', 'dfg': 'DFG', 'wf': 'WF', 'waterfall': 'WF', 'sky': 'Sky', 'cmi': 'CMI' };
   if (vn) {
-    const vl = vn.toLowerCase();
-    let matched = false;
-    for (const k in vmap) { if (vl.indexOf(k) !== -1) { document.getElementById('f_vendor').value = vmap[k]; matched = true; break; } }
-    if (!matched) {
+    const short = matchVendorShort(vn);
+    if (short) { document.getElementById('f_vendor').value = short; }
+    else {
       // Unknown vendor — use the raw name from the document
       document.getElementById('f_vendor').value = vn;
       // Add to datalist if not already there
@@ -731,6 +811,7 @@ function buildOrderFromForm() {
     invoice_date: document.getElementById('f_invoice_date').value,
     due_date: document.getElementById('f_due_date').value,
     status: document.getElementById('f_status').value,
+    line_items: readLineItemsFromForm(),
     added: new Date().toISOString()
   };
 }
@@ -755,6 +836,8 @@ function updateOrderFromForm(o) {
   if (invDate) o.invoice_date = invDate;
   var dueDate = document.getElementById('f_due_date').value;
   if (dueDate) o.due_date = dueDate;
+  var lineItems = readLineItemsFromForm();
+  if (lineItems.length) o.line_items = lineItems;
 }
 
 // ═══ DUPLICATE / INVOICE MATCHING ENGINE ═══
@@ -851,6 +934,7 @@ function addVendorToDatalist(vendorName) {
 
 function getVendorList() {
   var base = ['IMP','FHC','M3','DFG','WF','Sky','CMI'];
+  if (REG_VENDORS) REG_VENDORS.forEach(function(v){ var s = REG_ID_TO_SHORT[v.id] || v.name; if (s && base.indexOf(s) === -1) base.push(s); });
   try {
     var saved = localStorage.getItem('eg_custom_vendors');
     if (saved) base = base.concat(JSON.parse(saved));
@@ -883,7 +967,7 @@ function clearForm() {
   ['f_po','f_customer','f_address','f_jobtype','f_vendor','f_vendor_wo','f_amount','f_invoice_num'].forEach(function(id) { document.getElementById(id).value = ''; });
   ['f_order_date','f_expected_date','f_invoice_date','f_due_date','f_completion_date'].forEach(function(id) { document.getElementById(id).value = ''; });
   document.getElementById('f_status').value = 'open'; document.getElementById('f_division').value = 'Residential';
-  document.getElementById('extractedForm').classList.remove('visible'); document.getElementById('lineItemsSection').style.display = 'none'; document.getElementById('fileInput').value = '';
+  document.getElementById('extractedForm').classList.remove('visible'); document.getElementById('lineItemsSection').style.display = 'none'; document.getElementById('lineItemsContainer').innerHTML = ''; document.getElementById('fileInput').value = '';
   window._scanDupeHint = null;
   var hintBadge = document.getElementById('dupeHintBadge');
   if (hintBadge) hintBadge.style.display = 'none';
@@ -935,13 +1019,10 @@ async function parseSGPDF(file) {
     const parsed = JSON.parse(jsonStr);
     if (!parsed.orders || !Array.isArray(parsed.orders)) throw new Error('No orders array in AI response');
 
-    // Map raw vendor strings to your short codes (same logic as CSV path)
-    const vendorMap = {'fhc':'FHC','imperial':'IMP','sky':'Sky','m3':'M3','dfg':'DFG','waterfall':'WF',' wf':'WF','cmi':'CMI'};
+    // Map raw vendor strings to canonical short codes (shared registry matcher)
     const mapVendor = function(raw){
       if (!raw) return '';
-      const vl = raw.toLowerCase();
-      for (const k in vendorMap) { if (vl.indexOf(k) !== -1) return vendorMap[k]; }
-      return raw.trim();
+      return matchVendorShort(raw) || raw.trim();
     };
 
     const transformed = parsed.orders.map(function(o){
@@ -991,12 +1072,11 @@ function parseSGCSV(file) {
   reader.onload=function(e) {
     try {
       const text=e.target.result; const lines=text.replace(/\r/g,'').split('\n');
-      const vendorMap={'fhc':'FHC','imperial glass':'IMP','imperial tempered':'IMP','sky building':'Sky','sky':'Sky','m3':'M3','dfg':'DFG','wf':'WF'};
       let currentVendor=''; const parsed=[];
       for(let i=0;i<lines.length;i++){
         const line=lines[i].trim(); if(!line) continue;
         const fields=parseCSVLine(lines[i]);
-        for(let col=0;col<=1;col++){ const cell=(fields[col]||'').trim(); if(cell.toLowerCase().startsWith('supplier :')|| cell.toLowerCase().startsWith('supplier:')){ const vName=cell.replace(/supplier\s*:\s*/i,'').trim().toLowerCase(); for(const k in vendorMap){ if(vName.indexOf(k)!==-1){currentVendor=vendorMap[k];break;}} if(!currentVendor) currentVendor=cell.replace(/supplier\s*:\s*/i,'').trim(); break;}}
+        for(let col=0;col<=1;col++){ const cell=(fields[col]||'').trim(); if(cell.toLowerCase().startsWith('supplier :')|| cell.toLowerCase().startsWith('supplier:')){ const vName=cell.replace(/supplier\s*:\s*/i,'').trim(); currentVendor=matchVendorShort(vName)||vName; break;}}
         const poField=(fields[1]||'').trim(); const divField=(fields[2]||'').trim(); const ownerField=(fields[3]||'').trim(); const orderedField=(fields[6]||'').trim(); const expectedField=(fields[7]||'').trim(); const itemsOrderedField=(fields[8]||'').trim(); const itemsOutstandingField=(fields[9]||'').trim(); const netTotalField=(fields[10]||'').trim();
         if(poField&&(divField==='Residential'||divField==='Commercial')&&orderedField){ const po=parseOwnerField(ownerField); const amount=parseFloat((netTotalField||'0').replace(/[$,]/g,''))||0;
           parsed.push({po:poField,vendor:currentVendor,customer:po.customer,address:po.address,division:divField,order_date:parseSGDate(orderedField),expected_date:parseSGDate(expectedField),amount:amount,items_ordered:parseInt(itemsOrderedField)||0,items_outstanding:parseInt(itemsOutstandingField)||0,status:'open',jobtype:'glass',material:'glass',source:'sg_import'});
@@ -1070,7 +1150,11 @@ function openModal(idx){
   document.getElementById('modalInvoiceInfo').innerHTML=
     '<div class="modal-row"><span>Invoice #</span><input class="modal-input" id="me_invoice_num" value="'+escHtml(o.invoice_num||'')+'"></div>'+
     '<div class="modal-row"><span>Invoice Date</span><input class="modal-input" type="date" id="me_invoice_date" value="'+(o.invoice_date||'')+'"></div>'+
-    '<div class="modal-row"><span>Due Date</span><input class="modal-input" type="date" id="me_due_date" value="'+(o.due_date||'')+'"></div>';
+    '<div class="modal-row"><span>Due Date</span><input class="modal-input" type="date" id="me_due_date" value="'+(o.due_date||'')+'"></div>'+
+    ((o.line_items&&o.line_items.length)?
+      '<div style="margin-top:10px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Line items</div>'+
+      o.line_items.map(function(li){return '<div class="modal-row" style="font-size:12px"><span>'+escHtml(li.description||'—')+'</span><span>'+(li.qty?li.qty+' × ':'')+(li.rate?'$'+Number(li.rate).toFixed(2):'')+(li.amount?' = $'+Number(li.amount).toFixed(2):'')+'</span></div>';}).join('')
+      :'');
   document.getElementById('invoiceLoading').classList.remove('visible');document.getElementById('invoiceFileInput').value='';document.getElementById('modalOverlay').classList.add('open');
 }
 function closeModal(e,force){if(force||(e&&e.target===document.getElementById('modalOverlay'))){document.getElementById('modalOverlay').classList.remove('open');activeOrderIdx=null;}}
@@ -1447,7 +1531,7 @@ sgDropZone.addEventListener('dragleave',function(){sgDropZone.classList.remove('
 sgDropZone.addEventListener('drop',function(e){e.preventDefault();sgDropZone.classList.remove('dragging');const file=e.dataTransfer.files[0];if(file){document.getElementById('sgFileInput').files=e.dataTransfer.files;handleSGFile({target:{files:[file]}});}});
 
 // ═══ INIT ═══
-loadOrders().then(function(){ rebuildVendorDatalist(); checkMondayReport(); });
+loadOrders().then(function(){ rebuildVendorDatalist(); rebuildBuilderDatalist(); checkMondayReport(); loadRegistries(); });
 </script>
 </body>
 </html>
