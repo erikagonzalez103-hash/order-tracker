@@ -217,7 +217,7 @@
           <span class="badge warn" id="docTypeBadge" style="display:none">Sales Order</span>
         </div>
         <div class="form-grid">
-          <div class="field"><label>EG PO / Job #</label><input type="text" id="f_po" placeholder="e.g. 23500-1"></div>
+          <div class="field"><label>EG PO / Job #</label><input type="text" id="f_po" placeholder="e.g. 23500-1" onchange="poFieldChanged()"></div>
           <div class="field"><label>Customer</label><input type="text" id="f_customer" placeholder="Builder name" list="builder-list"><datalist id="builder-list"></datalist></div>
           <div class="field"><label>Job Address</label><input type="text" id="f_address" placeholder="123 Main St"></div>
           <div class="field"><label>Division</label><select id="f_division"><option value="Residential">Residential</option><option value="Commercial">Commercial</option></select></div>
@@ -314,7 +314,7 @@
 <!-- DUPLICATE RESOLUTION MODAL -->
 <div class="modal-overlay" id="dupeModalOverlay" onclick="closeDupeModal(event)">
   <div class="modal" style="width:640px;max-width:95vw">
-    <div class="modal-title">⚠ Possible Duplicate Detected</div>
+    <div class="modal-title" id="dupeTitle">⚠ Possible Duplicate Detected</div>
     <div class="modal-sub" id="dupeReason">Match reason: —</div>
     <div class="modal-section">
       <h4>Existing Order</h4>
@@ -328,8 +328,8 @@
       <h4>What would you like to do?</h4>
       <div style="display:grid;gap:8px">
         <button onclick="dupeAction('merge')" style="background:var(--accent);color:#000;border:none;border-radius:8px;padding:12px 16px;text-align:left;cursor:pointer;font-family:'DM Sans',sans-serif;transition:filter .15s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='none'">
-          <div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;margin-bottom:3px">🔗 Merge into existing order</div>
-          <div style="font-size:11px;opacity:.8">Fill in missing fields and update invoice info. Best when adding an invoice to an existing sales order, or completing a partial record.</div>
+          <div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;margin-bottom:3px" id="dupeMergeTitle">🔗 Merge into existing order</div>
+          <div style="font-size:11px;opacity:.8" id="dupeMergeDesc">Fill in missing fields and update invoice info. Best when adding an invoice to an existing sales order, or completing a partial record.</div>
         </button>
         <button onclick="dupeAction('override')" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:12px 16px;text-align:left;cursor:pointer;font-family:'DM Sans',sans-serif" onmouseover="this.style.borderColor='var(--warn)'" onmouseout="this.style.borderColor='var(--border)'">
           <div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;margin-bottom:3px;color:var(--warn)">✎ Override existing order</div>
@@ -395,7 +395,7 @@
 <div class="modal-overlay" id="cleanupOverlay" onclick="closeCleanup(event)">
   <div class="modal" style="width:760px;max-width:95vw;max-height:90vh;">
     <div class="modal-title">🧹 Order Cleanup</div>
-    <div class="modal-sub">Scan your orders for duplicates and related documents (POs, sales orders, invoices) that can be merged into a single line item.</div>
+    <div class="modal-sub">Scan your orders for duplicates and related documents (POs, sales orders, invoices) that can be merged into a single line item. Red <strong>duplicate</strong> groups are safe to bulk-merge; yellow <strong>review</strong> groups are educated guesses — check them and merge one at a time.</div>
 
     <div id="cleanup-scanning" style="display:none;text-align:center;padding:24px;">
       <div class="spinner" style="margin:0 auto 12px;"></div>
@@ -417,6 +417,7 @@
           <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Clean Orders</div>
         </div>
       </div>
+      <div id="cleanup-repair-note" style="display:none;background:rgba(79,255,176,.08);border:1px solid rgba(79,255,176,.35);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--accent);"></div>
     </div>
 
     <div id="cleanup-groups" style="max-height:50vh;overflow-y:auto;"></div>
@@ -469,6 +470,74 @@ function matchVendorShort(rawName) {
   }
   for (const k in VENDOR_SHORT_FALLBACK) { if (vl.indexOf(k) !== -1) return VENDOR_SHORT_FALLBACK[k]; }
   return null;
+}
+
+// ═══ SELF-REFERENCE SCRUB + PO REPORT LOOKUP ═══
+// Vendor documents are addressed to US, so the AI can return our own name or
+// shop address as the "customer" / "job address". Scrub those, then backfill
+// the customer-side fields from the weekly SG PO report rows already in
+// `orders` (the PO report is the source of truth for customer + job site).
+const SELF_NAMES = ['dion harrison', 'dion harrisan', 'dion harris', 'eridion glass', 'eridion'];
+const SELF_ADDRESS_MARKERS = ['knoll manor'];
+function isSelfName(s) { if (!s) return false; const v = String(s).toLowerCase(); return SELF_NAMES.some(function(n) { return v.indexOf(n) !== -1; }); }
+function isSelfAddress(s) { if (!s) return false; const v = String(s).toLowerCase(); return SELF_ADDRESS_MARKERS.some(function(n) { return v.indexOf(n) !== -1; }); }
+
+// "26141-1" → "26141"; POs without a dash suffix are already the base.
+function poBase(po) { const p = String(po || '').trim().toLowerCase(); const m = p.match(/^(.*?)-\d+$/); return m ? m[1] : p; }
+
+// Find the PO-report row for a scanned/typed EG PO. Exact match first, then
+// base-number match ("26141" ↔ "26141-1"), with vendor as the tie-breaker
+// (e.g. 26142-1 is Imperial, 26142-2 is FHC).
+function findPORecord(po, vendorShort) {
+  const p = String(po || '').trim().toLowerCase();
+  if (!p) return null;
+  let cands = orders.filter(function(o) { return o.po && o.po.trim().toLowerCase() === p; });
+  if (!cands.length) cands = orders.filter(function(o) { return o.po && poBase(o.po) === poBase(p); });
+  if (!cands.length) return null;
+  if (cands.length > 1 && vendorShort) {
+    const vl = String(vendorShort).trim().toLowerCase();
+    const vMatch = cands.filter(function(o) { return (o.vendor || '').trim().toLowerCase() === vl; });
+    if (vMatch.length) cands = vMatch;
+  }
+  return { record: cands[0], unique: cands.length === 1 };
+}
+
+function ensurePOFillBadge() {
+  var b = document.getElementById('poFillBadge');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'poFillBadge';
+    b.style.cssText = 'background:rgba(79,255,176,.08);border:1px solid rgba(79,255,176,.35);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--accent);display:none;align-items:center;gap:8px;';
+    var form = document.getElementById('extractedForm');
+    form.insertBefore(b, form.firstChild.nextSibling);
+  }
+  return b;
+}
+
+// Fill customer / job address / division from the matched PO-report row.
+// Only overwrites values that are empty or that point back at ourselves —
+// anything the user typed by hand is left alone.
+function applyPOLookup() {
+  const poEl = document.getElementById('f_po');
+  const badge = ensurePOFillBadge();
+  const found = findPORecord(poEl.value, document.getElementById('f_vendor').value);
+  if (!found) { badge.style.display = 'none'; return false; }
+  const r = found.record;
+  const custEl = document.getElementById('f_customer'), addrEl = document.getElementById('f_address');
+  if (r.customer && (!custEl.value.trim() || isSelfName(custEl.value))) custEl.value = r.customer;
+  if (r.address && (!addrEl.value.trim() || isSelfAddress(addrEl.value))) addrEl.value = r.address;
+  if (r.division) document.getElementById('f_division').value = r.division === 'Commercial' ? 'Commercial' : 'Residential';
+  if (r.jobtype && !document.getElementById('f_jobtype').value.trim()) document.getElementById('f_jobtype').value = r.jobtype;
+  // Upgrade a bare base number to the report's full purchase id so duplicate
+  // detection can link this scan to the imported PO row on save.
+  if (found.unique && r.po && r.po.trim().toLowerCase() !== poEl.value.trim().toLowerCase()) poEl.value = r.po;
+  badge.innerHTML = '<span style="font-size:14px">✓</span><span>Matched PO <strong>' + escHtml(r.po || '') + '</strong> in your PO report — customer &amp; job address filled in (' + escHtml(r.customer || '—') + (r.address ? ' · ' + escHtml(r.address) : '') + ')</span>';
+  badge.style.display = 'flex';
+  return true;
+}
+
+function poFieldChanged() {
+  if (applyPOLookup()) showToast('Customer & job address filled from PO report');
 }
 
 async function loadRegistries() {
@@ -571,7 +640,7 @@ async function extractWithAI(file, isInvoice) {
     const mediaType = file.type || 'image/jpeg';
     const isPdf = file.type === 'application/pdf';
     const sysInvoice = 'Extract invoice header data only. Return ONLY this JSON (no extra text, no markdown): {"invoice_number":"","invoice_date":"YYYY-MM-DD","due_date":"YYYY-MM-DD","amount_total":0,"vendor_name":"","terms":""}';
-    const sysOrder = 'Extract order header data only. Return ONLY this JSON (no extra text, no markdown): {"doc_type":"invoice","vendor_name":"","vendor_order_number":"","customer_po":"","order_date":"YYYY-MM-DD","expected_date":"YYYY-MM-DD","due_date":"YYYY-MM-DD","invoice_date":"YYYY-MM-DD","invoice_number":"","amount_total":0,"customer_name":"","job_address":"","job_type":"glass","division":"Residential","terms":""}. doc_type = sales_order, invoice, or purchase_order. job_type = glass or hardware. division = Residential or Commercial. customer_po is the CUSTOMER P.O. # shown on the document. job_address is the street address of the job site if visible.';
+    const sysOrder = 'Extract order header data only. Return ONLY this JSON (no extra text, no markdown): {"doc_type":"invoice","vendor_name":"","vendor_order_number":"","customer_po":"","order_date":"YYYY-MM-DD","expected_date":"YYYY-MM-DD","due_date":"YYYY-MM-DD","invoice_date":"YYYY-MM-DD","invoice_number":"","amount_total":0,"customer_name":"","job_address":"","job_type":"glass","division":"Residential","terms":""}. doc_type = sales_order, invoice, or purchase_order. job_type = glass or hardware. division = Residential or Commercial. IMPORTANT CONTEXT: this is a VENDOR document (sales order / order confirmation / invoice) issued TO our glass company. The Bill To / Sold To / Ship To / Customer / Account name printed on it is almost always our own company or owner (Eridion Glass / Dion Harrison or similar spellings) and the delivery address is our own shop — those are NOT the customer and NOT the job site. NEVER put the buyer/account holder or their address in customer_name or job_address. customer_name = the END customer / builder ONLY if the document clearly shows one (e.g. a job or site reference line); otherwise "". job_address = the job-site street address ONLY if a job/site reference distinct from the buyer address block is shown; otherwise "". customer_po = OUR P.O. / job number printed on the document (labels like "PO #", "Customer PO", "PO Number", "Reference", "Job") — typically a 5-digit number, sometimes with a dash suffix like "26141-1".';
     const userContent = isPdf
       ? [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 }, citations: { enabled: false } }, { type: 'text', text: 'Extract the key fields from this document.' }]
       : [{ type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } }, { type: 'text', text: 'Extract the key fields from this document.' }];
@@ -604,24 +673,23 @@ function fileToBase64(file) { return new Promise(function(res, rej) { const r = 
 
 function populateForm(data) {
   // ═══ CHECK: Is this an invoice that should link to an existing order? ═══
+  // Only route on doc_type — vendor sales orders sometimes carry an "invoice
+  // number" too, and those must be treated as sales orders, not invoices.
   const docType = data.doc_type || '';
-  if (docType === 'invoice' || data.invoice_number || data.inv) {
+  window._scanDocType = docType;
+  if (docType === 'invoice') {
     if (checkInvoiceLinking(data)) return; // Handled — linked to existing order
   }
 
-  // ═══ CHECK: Is this a duplicate of an existing order? ═══
-  // Don't block — just stash the match info so save will surface the 4-option modal.
-  const checkPO = data.customer_po || '';
   const checkWO = data.vendor_order_number || data.von || '';
   const checkVendor = data.vendor_name || data.vn || '';
   const checkAmt = data.amount_total || data.amt || 0;
-  const dupeMatch = findMatchingOrder(checkPO, checkWO, checkVendor, checkAmt);
-  window._scanDupeHint = dupeMatch.exact ? dupeMatch.reason : null;
 
   const g = function(full, abbr) { return data[full] || data[abbr] || ''; };
   const vn = data.vendor_name || data.vn || '';
   const jt = data.job_type || data.jt || '';
-  const cn = data.customer_name || data.cn || '';
+  let cn = data.customer_name || data.cn || '';
+  if (isSelfName(cn)) cn = ''; // vendor doc billed to us — that's not the customer
   const items = data.line_items || data.items || [];
   document.getElementById('f_po').value = data.customer_po || '';
   document.getElementById('f_vendor_wo').value = g('vendor_order_number','von');
@@ -631,7 +699,7 @@ function populateForm(data) {
   document.getElementById('f_invoice_num').value = g('invoice_number','inv');
   document.getElementById('f_invoice_date').value = g('invoice_date','id');
   document.getElementById('f_due_date').value = g('due_date','dd');
-  document.getElementById('f_address').value = data.job_address || '';
+  document.getElementById('f_address').value = isSelfAddress(data.job_address) ? '' : (data.job_address || '');
   if (data.division) { const divEl = document.getElementById('f_division'); if (data.division.toLowerCase().indexOf('comm') !== -1) divEl.value = 'Commercial'; else divEl.value = 'Residential'; }
   if (vn) {
     const short = matchVendorShort(vn);
@@ -645,6 +713,15 @@ function populateForm(data) {
   }
   if (jt) { document.getElementById('f_jobtype').value = jt; if (jt.toLowerCase().indexOf('hardware') !== -1 || jt.toLowerCase().indexOf('handle') !== -1) document.getElementById('f_material').value = 'hardware'; else document.getElementById('f_material').value = 'glass'; }
   if (cn) document.getElementById('f_customer').value = cn;
+  // Backfill customer + job address from the weekly PO report (SG import rows),
+  // then compute the match hint — the lookup may have upgraded a bare base PO
+  // ("26141") to the report's full purchase id ("26141-1").
+  applyPOLookup();
+  var m2 = findMatchingOrder(document.getElementById('f_po').value.trim(), checkWO, checkVendor, checkAmt);
+  window._scanMatchInfo = m2.exact ? {
+    reason: m2.reason, strength: m2.strength, po: m2.order.po,
+    rel: classifyRelationship(m2.order, document.getElementById('f_invoice_num').value.trim(), docType)
+  } : null;
   var badge = document.getElementById('docTypeBadge');
   if (docType === 'sales_order') { badge.textContent = 'Vendor calls this an invoice - treated as Sales Order'; badge.style.display = 'inline-block'; } else { badge.style.display = 'none'; }
   if (items.length > 0) {
@@ -653,17 +730,31 @@ function populateForm(data) {
     container.innerHTML = items.map(function(li) { return '<div class="line-item"><div class="field"><input type="text" value="' + escHtml(li.description || li.d || '') + '" placeholder="Description"></div><div class="field"><input type="number" value="' + (li.qty || li.q || '') + '" placeholder="Qty"></div><div class="field"><input type="number" value="' + (li.rate || li.r || '') + '" placeholder="Rate"></div><div class="field"><input type="number" value="' + (li.amount || li.a || '') + '" placeholder="Amount"></div></div>'; }).join('');
   }
   document.getElementById('extractedForm').classList.add('visible');
-  // Show a subtle non-blocking hint if a possible duplicate was detected
+  // Show a subtle non-blocking hint when this scan matches an existing order.
+  // The copy depends on the relationship — an invoice or vendor SO arriving
+  // for a tracked order is the normal flow, not a scary duplicate.
   var hintBadge = document.getElementById('dupeHintBadge');
-  if (window._scanDupeHint) {
+  var mi = window._scanMatchInfo;
+  if (mi) {
     if (!hintBadge) {
       hintBadge = document.createElement('div');
       hintBadge.id = 'dupeHintBadge';
-      hintBadge.style.cssText = 'background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.4);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--warn);display:flex;align-items:center;gap:8px;';
       var form = document.getElementById('extractedForm');
       form.insertBefore(hintBadge, form.firstChild.nextSibling);
     }
-    hintBadge.innerHTML = '<span style="font-size:14px">⚠</span><span>Possible duplicate detected (<strong>' + escHtml(window._scanDupeHint) + '</strong>). You\'ll get merge/override/new options when you save.</span>';
+    var baseCss = 'border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;display:flex;align-items:center;gap:8px;';
+    var icon, msg;
+    if (mi.rel === 'invoice_for_order') {
+      hintBadge.style.cssText = baseCss + 'background:rgba(74,158,255,.08);border:1px solid rgba(74,158,255,.4);color:var(--accent3);';
+      icon = '📎'; msg = 'This looks like the <strong>invoice</strong> for order <strong>' + escHtml(mi.po || '') + '</strong> — saving will attach it. The sales/work order info is kept.';
+    } else if (mi.rel === 'vendor_doc_for_po') {
+      hintBadge.style.cssText = baseCss + 'background:rgba(74,158,255,.08);border:1px solid rgba(74,158,255,.4);color:var(--accent3);';
+      icon = '🔗'; msg = 'This matches PO <strong>' + escHtml(mi.po || '') + '</strong> from your imported report — saving will merge the vendor\'s details into it.';
+    } else {
+      hintBadge.style.cssText = baseCss + 'background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.4);color:var(--warn);';
+      icon = '⚠'; msg = 'Possible duplicate detected (<strong>' + escHtml(mi.reason || '') + '</strong>). You\'ll get merge/override/new options when you save.';
+    }
+    hintBadge.innerHTML = '<span style="font-size:14px">' + icon + '</span><span>' + msg + '</span>';
     hintBadge.style.display = 'flex';
   } else if (hintBadge) {
     hintBadge.style.display = 'none';
@@ -688,18 +779,19 @@ async function saveOrder() {
   const vendor = document.getElementById('f_vendor').value.trim();
   const amount = parseFloat(document.getElementById('f_amount').value) || 0;
 
-  // ═══ DUPLICATE DETECTION ═══
+  // ═══ DUPLICATE / LIFECYCLE DETECTION ═══
   const match = findMatchingOrder(po, vendor_wo, vendor, amount);
   if (match.exact) {
     const o = match.order;
     const idx = orders.indexOf(o);
     const formOrder = buildOrderFromForm();
-    const action = await showDupeModal(o, match.reason, formOrder);
+    const rel = classifyRelationship(o, formOrder.invoice_num, window._scanDocType || '');
+    const action = await showDupeModal(o, match.reason, formOrder, rel);
 
     if (action === 'merge') {
-      mergeOrderData(o, formOrder);
+      mergeOrderData(o, formOrder, rel === 'invoice_for_order');
       saveOrders(); renderAll(); clearForm();
-      showToast('Merged into existing order');
+      showToast(rel === 'invoice_for_order' ? 'Invoice attached to ' + (o.po || 'existing order') : 'Merged into existing order');
       setTimeout(function() { openModal(idx); }, 500);
     } else if (action === 'override') {
       updateOrderFromForm(o);
@@ -725,9 +817,32 @@ async function saveOrder() {
 // ═══ DUPLICATE RESOLUTION MODAL ═══
 let _dupeResolver = null;
 
-function showDupeModal(existingOrder, reason, newOrder) {
+function showDupeModal(existingOrder, reason, newOrder, rel) {
   return new Promise(function(resolve) {
     _dupeResolver = resolve;
+    // Frame the modal by relationship: attaching an invoice or a vendor SO to
+    // a tracked order is the normal lifecycle, not a scary duplicate.
+    var framing = {
+      invoice_for_order: {
+        title: '📎 Invoice for an Existing Order',
+        mergeTitle: '📎 Attach invoice to the existing order',
+        mergeDesc: 'Adds the invoice #, invoice/due dates and billed amount. The sales/work order info (PO, customer, order & expected dates) is kept.'
+      },
+      vendor_doc_for_po: {
+        title: '🔗 Matches a PO from Your Weekly Report',
+        mergeTitle: '🔗 Merge into the imported PO',
+        mergeDesc: 'Fills the vendor’s WO#, dates and actual price into the PO row. Customer and job address from your report are kept.'
+      },
+      possible_duplicate: {
+        title: '⚠ Possible Duplicate Detected',
+        mergeTitle: '🔗 Merge into existing order',
+        mergeDesc: 'Fill in missing fields and update invoice info. Best when adding an invoice to an existing sales order, or completing a partial record.'
+      }
+    };
+    var f = framing[rel] || framing.possible_duplicate;
+    document.getElementById('dupeTitle').textContent = f.title;
+    document.getElementById('dupeMergeTitle').textContent = f.mergeTitle;
+    document.getElementById('dupeMergeDesc').textContent = f.mergeDesc;
     document.getElementById('dupeReason').textContent = 'Match reason: ' + reason;
 
     function summarize(o) {
@@ -770,18 +885,29 @@ function dupeAction(action) {
 //     they ARE the real-world truth that should drive reports and the forecast.
 //   - Amount: the vendor's document wins outright when present. The SG amount is an estimate;
 //     the SO/OC/invoice carries the actual price (which can be higher OR lower).
-function mergeOrderData(existing, newData) {
+function mergeOrderData(existing, newData, newIsInvoice) {
   // Customer-side / identity — fill empty only
   var customerFields = ['po','customer','address','division','jobtype','material','vendor'];
   customerFields.forEach(function(f) {
     if (!existing[f] && newData[f]) existing[f] = newData[f];
   });
-  // Vendor-side — new wins when present
-  var vendorFields = ['vendor_wo','order_date','expected_date','completion_date',
-                      'invoice_num','invoice_date','due_date'];
+  // Vendor-side — new wins when present. EXCEPT: when the new document is an
+  // invoice, the sales/work order stays authoritative for the order timeline —
+  // an invoice's dates describe billing, not when the order was placed or due
+  // to arrive. Invoice fields themselves always come from the invoice.
+  var vendorFields = newIsInvoice
+    ? ['invoice_num','invoice_date','due_date','completion_date']
+    : ['vendor_wo','order_date','expected_date','completion_date',
+       'invoice_num','invoice_date','due_date'];
   vendorFields.forEach(function(f) {
     if (newData[f]) existing[f] = newData[f];
   });
+  if (newIsInvoice) {
+    // Timeline fields from an invoice may still FILL gaps, never overwrite
+    ['vendor_wo','order_date','expected_date'].forEach(function(f) {
+      if (!existing[f] && newData[f]) existing[f] = newData[f];
+    });
+  }
   // Amount — vendor doc wins outright (was: only if larger, which dropped lower-than-estimate prices)
   if (newData.amount && newData.amount > 0) {
     existing.amount = newData.amount;
@@ -841,31 +967,63 @@ function updateOrderFromForm(o) {
 }
 
 // ═══ DUPLICATE / INVOICE MATCHING ENGINE ═══
+// Returns { exact, order, reason, strength }. strength 'strong' = identifier
+// match (PO / WO#); 'weak' = circumstantial (vendor + amount), which only
+// fires when the document carries no identifiers at all.
 function findMatchingOrder(po, vendorWO, vendor, amount) {
+  var vShort = vendor ? (matchVendorShort(vendor) || String(vendor).trim()).toLowerCase() : '';
+  // A candidate is vendor-compatible if either side has no vendor, or they agree.
+  function vendorOK(o) {
+    var ov = (o.vendor || '').trim().toLowerCase();
+    return !ov || !vShort || ov === vShort;
+  }
   // Priority 1: Exact PO match
   if (po) {
     var poMatch = orders.find(function(o) {
       return o.po && o.po.trim().toLowerCase() === po.trim().toLowerCase();
     });
-    if (poMatch) return { exact: true, order: poMatch, reason: 'PO# match' };
+    if (poMatch) return { exact: true, order: poMatch, reason: 'PO# match', strength: 'strong' };
+    // Priority 1b: base-number match — vendor docs often print "26141" while
+    // the PO report row is "26141-1". Only vendor-compatible rows count, and
+    // vendor breaks ties between sub-orders (26142-1 Imperial vs 26142-2 FHC).
+    var baseCands = orders.filter(function(o) { return o.po && poBase(o.po) === poBase(po) && vendorOK(o); });
+    if (baseCands.length === 1) return { exact: true, order: baseCands[0], reason: 'PO# match (' + baseCands[0].po + ')', strength: 'strong' };
+    if (baseCands.length > 1 && vShort) {
+      var bv = baseCands.filter(function(o) { return (o.vendor || '').trim().toLowerCase() === vShort; });
+      if (bv.length === 1) return { exact: true, order: bv[0], reason: 'PO# + vendor match (' + bv[0].po + ')', strength: 'strong' };
+    }
   }
-  // Priority 2: Vendor WO match
+  // Priority 2: Vendor WO match — WO numbers are vendor-scoped, so a
+  // conflicting vendor disqualifies the candidate.
   if (vendorWO) {
     var woMatch = orders.find(function(o) {
-      return o.vendor_wo && o.vendor_wo.trim().toLowerCase() === vendorWO.trim().toLowerCase();
+      return o.vendor_wo && o.vendor_wo.trim().toLowerCase() === vendorWO.trim().toLowerCase() && vendorOK(o);
     });
-    if (woMatch) return { exact: true, order: woMatch, reason: 'Vendor WO# match' };
+    if (woMatch) return { exact: true, order: woMatch, reason: 'Vendor WO# match', strength: 'strong' };
   }
-  // Priority 3: Same vendor + same amount (within $1)
-  if (vendor && amount > 0) {
-    var vl = vendor.trim().toLowerCase();
+  // Priority 3 (weak): same vendor + same amount, open orders only. ONLY when
+  // the document has no PO and no WO# — if it carried an identifier that
+  // failed to match above, it names a DIFFERENT order, not a duplicate.
+  // Amounts repeat constantly across orders from the same vendor.
+  if (!po && !vendorWO && vShort && amount > 0) {
     var amtMatch = orders.find(function(o) {
-      return (o.vendor || '').trim().toLowerCase() === vl &&
+      return normalizeStatus(o.status) === 'open' &&
+             (o.vendor || '').trim().toLowerCase() === vShort &&
              Math.abs((o.amount || 0) - amount) < 1;
     });
-    if (amtMatch) return { exact: true, order: amtMatch, reason: 'Vendor + amount match' };
+    if (amtMatch) return { exact: true, order: amtMatch, reason: 'same vendor + same amount (no PO/WO# on document)', strength: 'weak' };
   }
-  return { exact: false, order: null, reason: null };
+  return { exact: false, order: null, reason: null, strength: null };
+}
+
+// ═══ RELATIONSHIP CLASSIFIER ═══
+// A match isn't always a duplicate: an invoice arriving for a tracked order,
+// or a vendor's SO arriving for an imported PO row, is the NORMAL lifecycle.
+function classifyRelationship(existing, newHasInvoiceNum, docType) {
+  var newIsInvoice = docType === 'invoice' || !!newHasInvoiceNum;
+  if (newIsInvoice && !existing.invoice_num) return 'invoice_for_order';
+  if (!newIsInvoice && existing.source === 'sg_import' && !existing.vendor_wo) return 'vendor_doc_for_po';
+  return 'possible_duplicate';
 }
 
 // ═══ INVOICE-TO-ORDER LINKING ═══
@@ -968,9 +1126,12 @@ function clearForm() {
   ['f_order_date','f_expected_date','f_invoice_date','f_due_date','f_completion_date'].forEach(function(id) { document.getElementById(id).value = ''; });
   document.getElementById('f_status').value = 'open'; document.getElementById('f_division').value = 'Residential';
   document.getElementById('extractedForm').classList.remove('visible'); document.getElementById('lineItemsSection').style.display = 'none'; document.getElementById('lineItemsContainer').innerHTML = ''; document.getElementById('fileInput').value = '';
-  window._scanDupeHint = null;
+  window._scanMatchInfo = null;
+  window._scanDocType = '';
   var hintBadge = document.getElementById('dupeHintBadge');
   if (hintBadge) hintBadge.style.display = 'none';
+  var poBadge = document.getElementById('poFillBadge');
+  if (poBadge) poBadge.style.display = 'none';
 }
 
 // ═══ SMART GLAZIER IMPORT ═══
@@ -986,7 +1147,7 @@ async function parseSGPDF(file) {
 
   try {
     const base64 = await fileToBase64(file);
-    const systemPrompt = 'You are extracting data from a Smart Glazier "Purchase Orders" tabular report. Extract EVERY row from EVERY page. The columns are: Purchase ID (e.g. "26022-2"), Division (Residential or Commercial), Owner (e.g. "Dion Harrison"), Customer (e.g. "Hines Homes" or "Grand Homes North Division"), Reference (e.g. "222 Abington" or "1011 Hackberry - Shower Glass" — usually a street address, sometimes with a job descriptor), Ordered date, Expected date, Items Ordered, Items Outstanding, Net Total, Gross Total. The report MAY be grouped by supplier (vendor) with section headers like "Supplier : FHC" or "Supplier : Imperial Glass". If supplier sections exist, assign each order to the correct supplier. If no supplier sections appear, leave vendor blank. Return ONLY valid JSON (no markdown fences, no commentary) in this exact shape: {"orders":[{"po":"","division":"Residential","customer":"","reference":"","ordered":"YYYY-MM-DD","expected":"YYYY-MM-DD","items_ordered":0,"items_outstanding":0,"net_total":0,"vendor":""}]}. Dates MUST be YYYY-MM-DD. net_total is a number (no $ or commas). Be thorough — do not skip any rows. Include rows even when amount is $0.';
+    const systemPrompt = 'You are extracting data from a Smart Glazier "Purchase Orders" tabular report. Extract EVERY row from EVERY page. The columns are: Purchase ID (e.g. "26022-2"), Division (Residential or Commercial), Owner (e.g. "Dion Harrison"), Customer (e.g. "Hines Homes" or "Grand Homes North Division"), Reference (e.g. "222 Abington" or "1011 Hackberry - Shower Glass" — usually a street address, sometimes with a job descriptor), Ordered date, Expected date, Items Ordered, Items Outstanding, Net Total, Gross Total. Some report layouts also include a per-row Supplier column (e.g. "Imperial Glass", "Sky Building Inc.", "FHC") between Reference and the dates — if present, use that value as each row\'s vendor. Alternatively the report MAY be grouped by supplier (vendor) with section headers like "Supplier : FHC" or "Supplier : Imperial Glass" — if supplier sections exist, assign each order to the correct supplier. If neither appears, leave vendor blank. Return ONLY valid JSON (no markdown fences, no commentary) in this exact shape: {"orders":[{"po":"","division":"Residential","customer":"","reference":"","ordered":"YYYY-MM-DD","expected":"YYYY-MM-DD","items_ordered":0,"items_outstanding":0,"net_total":0,"vendor":""}]}. Dates MUST be YYYY-MM-DD. net_total is a number (no $ or commas). Be thorough — do not skip any rows. Include rows even when amount is $0.';
 
     const response = await fetch(WORKER_URL + '/api/messages', {
       method:'POST',
@@ -1220,6 +1381,17 @@ async function checkMondayReport(){
 
 let _cleanupGroups = [];
 
+// Junk PO values ("Residential", "Camp Bowie", addresses) must never group
+// records — a real EG PO is digit-based ("26141", "26141-1", "232-26025").
+function cleanupPO(po) {
+  var p = String(po || '').trim();
+  if (!p || /\s/.test(p) || !/\d{4,}/.test(p)) return '';
+  return p.toLowerCase();
+}
+function cleanupVendor(o) { return (matchVendorShort(o.vendor) || o.vendor || '').trim().toLowerCase(); }
+function cleanupVendorsCompat(a, b) { var va = cleanupVendor(a), vb = cleanupVendor(b); return !va || !vb || va === vb; }
+function hasIdentifier(o) { return !!cleanupPO(o.po) || !!(o.vendor_wo || '').trim(); }
+
 function showCleanup() {
   try {
     document.getElementById('cleanupOverlay').classList.add('open');
@@ -1241,17 +1413,44 @@ function runCleanupScan() {
   _cleanupGroups = [];
   var used = new Set(); // track order IDs already grouped
 
-  // ── Pass 1: Exact duplicates (same PO# + same vendor) ──
+  // ── Pass 0: Repair scan-damaged records from the PO report ──
+  // Old scans saved our own name / shop address as customer / job address.
+  // When the record's PO matches an SG report row, restore the truth from
+  // there. Only bad or empty values are touched — real data is left alone.
+  var repaired = 0;
+  var sgRows = orders.filter(function(o) { return o.source === 'sg_import'; });
+  orders.forEach(function(o) {
+    if (o.source === 'sg_import') return;
+    var p = cleanupPO(o.po);
+    if (!p) return;
+    var cands = sgRows.filter(function(s) { return cleanupPO(s.po) === p; });
+    if (!cands.length) cands = sgRows.filter(function(s) { var sp = cleanupPO(s.po); return sp && poBase(sp) === poBase(p) && cleanupVendorsCompat(s, o); });
+    if (cands.length !== 1) return;
+    var s = cands[0], fixed = false;
+    if (s.customer && (!String(o.customer || '').trim() || isSelfName(o.customer))) { o.customer = s.customer; fixed = true; }
+    if (s.address && (!String(o.address || '').trim() || isSelfAddress(o.address))) { o.address = s.address; fixed = true; }
+    if (fixed) repaired++;
+  });
+  if (repaired > 0) saveOrders();
+  var note = document.getElementById('cleanup-repair-note');
+  if (note) {
+    if (repaired > 0) { note.style.display = 'block'; note.textContent = '🔧 Repaired ' + repaired + ' scanned orders — customer / job address restored from your PO report.'; }
+    else note.style.display = 'none';
+  }
+
+  // ── Pass 1: Exact duplicates — same REAL PO# and vendors don't conflict.
+  //     Junk PO values ("Residential") are excluded by cleanupPO so they can
+  //     never collapse unrelated orders into one.
   for (var i = 0; i < orders.length; i++) {
     if (used.has(orders[i].id)) continue;
     var o = orders[i];
-    if (!o.po) continue;
+    var oPO = cleanupPO(o.po);
+    if (!oPO) continue;
     var group = [o];
     for (var j = i + 1; j < orders.length; j++) {
       if (used.has(orders[j].id)) continue;
       var c = orders[j];
-      if (c.po && c.po.trim().toLowerCase() === o.po.trim().toLowerCase() &&
-          (!c.vendor || !o.vendor || c.vendor.trim().toLowerCase() === o.vendor.trim().toLowerCase())) {
+      if (cleanupPO(c.po) === oPO && cleanupVendorsCompat(c, o)) {
         group.push(c);
         used.add(c.id);
       }
@@ -1259,6 +1458,27 @@ function runCleanupScan() {
     if (group.length > 1) {
       used.add(o.id);
       _cleanupGroups.push({ type: 'duplicate', reason: 'Same PO#: ' + o.po, orders: group });
+    }
+  }
+
+  // ── Pass 1b: A bare PO ("26138") next to its sub-order ("26138-3") — a
+  //     scanned vendor doc saved without the report's full purchase id. Only
+  //     grouped when exactly ONE vendor-compatible sub-order exists; two
+  //     sub-orders from the same vendor (26146-1 / 26146-3) are genuinely
+  //     different orders and are left alone.
+  for (var ib = 0; ib < orders.length; ib++) {
+    if (used.has(orders[ib].id)) continue;
+    var ob = orders[ib];
+    var pb = cleanupPO(ob.po);
+    if (!pb || /-\d+$/.test(pb)) continue; // only bare base numbers
+    var subs = orders.filter(function(s) {
+      if (used.has(s.id) || s.id === ob.id) return false;
+      var sp = cleanupPO(s.po);
+      return sp && /-\d+$/.test(sp) && poBase(sp) === pb && cleanupVendorsCompat(s, ob);
+    });
+    if (subs.length === 1) {
+      used.add(ob.id); used.add(subs[0].id);
+      _cleanupGroups.push({ type: 'duplicate', reason: 'PO ' + ob.po + ' = ' + subs[0].po + ' (same order, bare vs full id)', orders: [ob, subs[0]] });
     }
   }
 
@@ -1271,7 +1491,8 @@ function runCleanupScan() {
     for (var j2 = i2 + 1; j2 < orders.length; j2++) {
       if (used.has(orders[j2].id)) continue;
       var c2 = orders[j2];
-      if (c2.vendor_wo && c2.vendor_wo.trim().toLowerCase() === o2.vendor_wo.trim().toLowerCase()) {
+      if (c2.vendor_wo && c2.vendor_wo.trim().toLowerCase() === o2.vendor_wo.trim().toLowerCase() &&
+          cleanupVendorsCompat(c2, o2)) {
         group2.push(c2);
         used.add(c2.id);
       }
@@ -1282,17 +1503,18 @@ function runCleanupScan() {
     }
   }
 
-  // ── Pass 3: Same vendor + same amount (within $2) — likely PO/SO/Invoice for same job ──
+  // ── Pass 3: A record with NO identifiers (no real PO, no WO#) matching
+  //     another order's vendor + amount. Two records that BOTH carry POs are
+  //     different jobs that happen to share a price — never grouped.
   for (var i3 = 0; i3 < orders.length; i3++) {
     if (used.has(orders[i3].id)) continue;
     var o3 = orders[i3];
-    if (!o3.vendor || !o3.amount) continue;
+    if (hasIdentifier(o3) || !cleanupVendor(o3) || !o3.amount) continue;
     var group3 = [o3];
-    for (var j3 = i3 + 1; j3 < orders.length; j3++) {
-      if (used.has(orders[j3].id)) continue;
+    for (var j3 = 0; j3 < orders.length; j3++) {
+      if (j3 === i3 || used.has(orders[j3].id)) continue;
       var c3 = orders[j3];
-      if (c3.vendor && c3.amount &&
-          c3.vendor.trim().toLowerCase() === o3.vendor.trim().toLowerCase() &&
+      if (c3.amount && cleanupVendor(c3) === cleanupVendor(o3) &&
           Math.abs(c3.amount - o3.amount) <= 2) {
         group3.push(c3);
         used.add(c3.id);
@@ -1300,31 +1522,41 @@ function runCleanupScan() {
     }
     if (group3.length > 1) {
       used.add(o3.id);
-      _cleanupGroups.push({ type: 'related', reason: o3.vendor + ' · $' + o3.amount.toFixed(2) + ' — likely same job', orders: group3 });
+      _cleanupGroups.push({ type: 'related', reason: o3.vendor + ' · $' + o3.amount.toFixed(2) + ' — one record has no PO/WO#; review before merging', orders: group3 });
     }
   }
 
-  // ── Pass 4: Same vendor + same address (fuzzy) — different docs for same job ──
+  // ── Pass 4: Same vendor + same address, but ONLY when one record lacks a
+  //     real PO, or one PO contains the other ("26025" ⊂ "232-26025").
+  //     Different POs at the same address are normal sub-orders — skipped.
   for (var i4 = 0; i4 < orders.length; i4++) {
     if (used.has(orders[i4].id)) continue;
     var o4 = orders[i4];
-    if (!o4.vendor || !o4.address) continue;
+    if (!cleanupVendor(o4) || !o4.address) continue;
+    // Our own shop address on a scanned record is extraction junk, not a job
+    // site — it must never group orders together.
+    if (isSelfAddress(o4.address)) continue;
     var addr4 = normalizeAddress(o4.address);
     if (!addr4) continue;
     var group4 = [o4];
     for (var j4 = i4 + 1; j4 < orders.length; j4++) {
       if (used.has(orders[j4].id)) continue;
       var c4 = orders[j4];
-      if (c4.vendor && c4.address &&
-          c4.vendor.trim().toLowerCase() === o4.vendor.trim().toLowerCase() &&
-          normalizeAddress(c4.address) === addr4) {
+      if (!c4.address || cleanupVendor(c4) !== cleanupVendor(o4) || normalizeAddress(c4.address) !== addr4) continue;
+      var p1 = cleanupPO(o4.po), p2 = cleanupPO(c4.po);
+      var oneMissing = !p1 || !p2;
+      // Containment, but not the bare-base/sub-order case — that's pass 1b's
+      // job, and when it stayed ambiguous there it must stay ungrouped here.
+      var contained = p1 && p2 && p1 !== p2 && (p1.indexOf(p2) !== -1 || p2.indexOf(p1) !== -1) &&
+                      poBase(p1) !== p2 && poBase(p2) !== p1;
+      if (oneMissing || contained) {
         group4.push(c4);
         used.add(c4.id);
       }
     }
     if (group4.length > 1) {
       used.add(o4.id);
-      _cleanupGroups.push({ type: 'related', reason: o4.vendor + ' · ' + o4.address + ' — same job address', orders: group4 });
+      _cleanupGroups.push({ type: 'related', reason: o4.vendor + ' · ' + o4.address + ' — same job address; review before merging', orders: group4 });
     }
   }
 
@@ -1347,8 +1579,46 @@ function runCleanupScan() {
     return;
   }
 
-  document.getElementById('cleanup-merge-all-btn').style.display = 'inline-block';
+  // Bulk-merge is only offered for exact duplicates — "review" groups are
+  // educated guesses and must be merged one at a time after a human look.
+  var mab = document.getElementById('cleanup-merge-all-btn');
+  mab.textContent = 'Merge ' + dupeCount + ' Duplicate Group' + (dupeCount === 1 ? '' : 's');
+  mab.style.display = dupeCount > 0 ? 'inline-block' : 'none';
   renderCleanupGroups();
+}
+
+// Merge a cleanup group into one record. Same authority rules as scan-time
+// merging: the SG report row owns the customer side, the vendor's doc (has a
+// WO#) owns the order timeline, the invoice owns billing + amount.
+function mergeGroupOrders(list) {
+  var merged = {};
+  var fields = ['po','customer','address','division','jobtype','material','vendor','vendor_wo',
+                'order_date','expected_date','completion_date','invoice_num','invoice_date',
+                'due_date','status','source','items_ordered','items_outstanding','line_items','added'];
+  list.forEach(function(o) { fields.forEach(function(f) { if (o[f] && !merged[f]) merged[f] = o[f]; }); });
+  var sg = null, soDoc = null, invDoc = null;
+  list.forEach(function(o) {
+    if (!sg && o.source === 'sg_import') sg = o;
+    if (!soDoc && o.vendor_wo) soDoc = o;
+    if (!invDoc && o.invoice_num) invDoc = o;
+  });
+  if (sg) ['po','customer','address','division','items_ordered','items_outstanding'].forEach(function(f) { if (sg[f]) merged[f] = sg[f]; });
+  // Prefer the full purchase id ("26138-3") over a bare base ("26138")
+  if (!/-\d+$/.test(String(merged.po || '').trim())) {
+    var fullPO = null;
+    list.forEach(function(o) { if (!fullPO && /-\d+$/.test(String(o.po || '').trim())) fullPO = String(o.po).trim(); });
+    if (fullPO) merged.po = fullPO;
+  }
+  if (soDoc) ['vendor_wo','order_date','expected_date'].forEach(function(f) { if (soDoc[f]) merged[f] = soDoc[f]; });
+  if (invDoc) ['invoice_num','invoice_date','due_date'].forEach(function(f) { if (invDoc[f]) merged[f] = invDoc[f]; });
+  // Amount: invoice (billed truth) > vendor doc (actual price) > highest estimate
+  if (invDoc && invDoc.amount) merged.amount = invDoc.amount;
+  else if (soDoc && soDoc.amount) merged.amount = soDoc.amount;
+  else merged.amount = list.reduce(function(m, o) { return Math.max(m, o.amount || 0); }, 0);
+  merged.status = list.some(function(o) { return normalizeStatus(o.status) === 'paid'; }) ? 'paid' : 'open';
+  merged.merged = true;
+  merged.mergedFrom = list.length;
+  return merged;
 }
 
 function normalizeAddress(addr) {
@@ -1365,9 +1635,10 @@ function normalizeAddress(addr) {
 function renderCleanupGroups() {
   var html = '';
   _cleanupGroups.forEach(function(group, gi) {
+    if (!group) return;
     var isDupe = group.type === 'duplicate';
     var borderColor = isDupe ? 'var(--accent2)' : 'var(--warn)';
-    var typeLabel = isDupe ? 'DUPLICATE' : 'MERGE CANDIDATES';
+    var typeLabel = isDupe ? 'DUPLICATE' : 'REVIEW — POSSIBLE MATCH';
 
     html += '<div id="cg-' + gi + '" style="background:var(--bg);border:1px solid var(--border);border-radius:10px;margin-bottom:12px;overflow:hidden;border-left:3px solid ' + borderColor + '">';
     html += '<div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">';
@@ -1412,33 +1683,7 @@ function mergeGroup(gi) {
   var group = _cleanupGroups[gi];
   if (!group || !group.orders.length) return;
 
-  // Merge strategy: keep the most complete data from all orders
-  var merged = {};
-  var fields = ['po','customer','address','division','jobtype','material','vendor','vendor_wo',
-                'order_date','expected_date','completion_date','invoice_num','invoice_date',
-                'due_date','status','source','items_ordered','items_outstanding'];
-
-  // Start with the first order as base
-  var base = group.orders[0];
-  for (var k in base) merged[k] = base[k];
-
-  // Layer in data from subsequent orders — non-empty values win
-  for (var i = 1; i < group.orders.length; i++) {
-    var o = group.orders[i];
-    fields.forEach(function(f) {
-      if (o[f] && !merged[f]) merged[f] = o[f];
-      // For invoice fields, prefer the one that actually has invoice data
-      if (f === 'invoice_num' && o[f] && !base[f]) merged[f] = o[f];
-      if (f === 'invoice_date' && o[f] && !base[f]) merged[f] = o[f];
-      if (f === 'due_date' && o[f] && !base[f]) merged[f] = o[f];
-    });
-    // Keep the higher amount (invoice amount > estimate)
-    if (o.amount && (!merged.amount || o.amount > merged.amount)) {
-      merged.amount = o.amount;
-    }
-    // If any version is paid, mark as paid
-    if (normalizeStatus(o.status) === 'paid') merged.status = 'paid';
-  }
+  var merged = mergeGroupOrders(group.orders);
 
   // Remove all orders in this group from the main list
   var removeIds = new Set(group.orders.map(function(o) { return o.id; }));
@@ -1446,8 +1691,6 @@ function mergeGroup(gi) {
 
   // Add the merged order at the top
   merged.id = Date.now();
-  merged.merged = true;
-  merged.mergedFrom = group.orders.length;
   orders.unshift(merged);
 
   // Remove this group from cleanup list
@@ -1469,39 +1712,33 @@ function skipGroup(gi) {
 }
 
 function mergeAllGroups() {
+  // Bulk-merge ONLY the exact-duplicate groups. "Review" groups are educated
+  // guesses (no PO on one record, address heuristics) and stay listed for a
+  // one-by-one human decision.
   var count = 0;
   for (var i = 0; i < _cleanupGroups.length; i++) {
-    if (_cleanupGroups[i]) {
-      var group = _cleanupGroups[i];
-      // Same merge logic as mergeGroup but without UI animation
-      var merged = {};
-      var fields = ['po','customer','address','division','jobtype','material','vendor','vendor_wo',
-                    'order_date','expected_date','completion_date','invoice_num','invoice_date',
-                    'due_date','status','source','items_ordered','items_outstanding'];
-      var base = group.orders[0];
-      for (var k in base) merged[k] = base[k];
-      for (var j = 1; j < group.orders.length; j++) {
-        var o = group.orders[j];
-        fields.forEach(function(f) { if (o[f] && !merged[f]) merged[f] = o[f]; });
-        if (o.amount && (!merged.amount || o.amount > merged.amount)) merged.amount = o.amount;
-        if (normalizeStatus(o.status) === 'paid') merged.status = 'paid';
-      }
-      var removeIds = new Set(group.orders.map(function(o2) { return o2.id; }));
-      orders = orders.filter(function(o3) { return !removeIds.has(o3.id); });
-      merged.id = Date.now() + i;
-      merged.merged = true;
-      merged.mergedFrom = group.orders.length;
-      orders.unshift(merged);
-      count++;
-    }
+    var group = _cleanupGroups[i];
+    if (!group || group.type !== 'duplicate') continue;
+    var merged = mergeGroupOrders(group.orders);
+    var removeIds = new Set(group.orders.map(function(o2) { return o2.id; }));
+    orders = orders.filter(function(o3) { return !removeIds.has(o3.id); });
+    merged.id = Date.now() + i;
+    orders.unshift(merged);
+    _cleanupGroups[i] = null;
+    count++;
   }
-  _cleanupGroups = [];
   saveOrders();
   renderAll();
-  document.getElementById('cleanup-groups').innerHTML = '';
   document.getElementById('cleanup-merge-all-btn').style.display = 'none';
-  document.getElementById('cleanup-empty').style.display = 'block';
-  document.getElementById('cleanup-empty').innerHTML = '<div style="font-size:28px;margin-bottom:8px;">✓</div><div style="font-family:Syne,sans-serif;font-size:15px;font-weight:700;">Done!</div><div style="font-size:12px;color:var(--muted);margin-top:4px;">Merged ' + count + ' groups. Your order list is clean.</div>';
+  var remaining = _cleanupGroups.filter(function(g) { return g !== null; });
+  if (remaining.length === 0) {
+    document.getElementById('cleanup-groups').innerHTML = '';
+    document.getElementById('cleanup-empty').style.display = 'block';
+    document.getElementById('cleanup-empty').innerHTML = '<div style="font-size:28px;margin-bottom:8px;">✓</div><div style="font-family:Syne,sans-serif;font-size:15px;font-weight:700;">Done!</div><div style="font-size:12px;color:var(--muted);margin-top:4px;">Merged ' + count + ' duplicate groups. Your order list is clean.</div>';
+  } else {
+    renderCleanupGroups();
+    showToast('Merged ' + count + ' duplicate groups — ' + remaining.length + ' left to review');
+  }
   updateCleanupCounts();
 }
 
@@ -1511,7 +1748,9 @@ function updateCleanupCounts() {
   var related = remaining.filter(function(g) { return g.type === 'related'; }).length;
   document.getElementById('cleanup-dupes').textContent = dupes;
   document.getElementById('cleanup-related').textContent = related;
-  document.getElementById('cleanup-clean').textContent = orders.length;
+  var stillGrouped = 0;
+  remaining.forEach(function(g) { stillGrouped += g.orders.length; });
+  document.getElementById('cleanup-clean').textContent = Math.max(0, orders.length - stillGrouped);
   if (remaining.length === 0) {
     document.getElementById('cleanup-merge-all-btn').style.display = 'none';
     if (document.getElementById('cleanup-empty').style.display === 'none') {
