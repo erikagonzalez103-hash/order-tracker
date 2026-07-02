@@ -629,12 +629,119 @@ function switchTab(tab) {
 function handleFile(event) { const file = event.target.files[0]; if (!file) return; extractWithAI(file, false); }
 function handleInvoiceFile(event) { const file = event.target.files[0]; if (!file) return; extractWithAI(file, true); }
 
-// ═══ FIXED: /api → /api/messages ═══
+// ═══ HARDENED CLAUDE CALL — timeout, retries, real error surfacing ═══
+// The worker proxies Anthropic verbatim: always HTTP 200 with the API's JSON
+// (errors arrive as {error:{type,message}}), or {error:'API proxy failed: …'}
+// (a string) when the worker itself fails. Transient conditions — rate limit,
+// overload, network blips, timeouts, HTML error pages — are retried with
+// backoff. Permanent ones (bad key, invalid request) fail immediately.
+const TRANSIENT_API_ERRORS = ['rate_limit_error', 'overloaded_error', 'api_error', 'timeout_error'];
+
+async function callClaude(body, onStatus, retries) {
+  if (retries === undefined) retries = 2;
+  var lastErr = '';
+  for (var attempt = 0; attempt <= retries; attempt++) {
+    if (attempt > 0) {
+      var waitS = attempt === 1 ? 5 : 20;
+      if (onStatus) onStatus('AI busy (' + lastErr + ') — retrying in ' + waitS + 's, attempt ' + (attempt + 1) + ' of ' + (retries + 1) + '…');
+      await new Promise(function(r) { setTimeout(r, waitS * 1000); });
+      if (onStatus) onStatus('Retrying…');
+    }
+    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = controller ? setTimeout(function() { controller.abort(); }, 120000) : null;
+    try {
+      var response = await fetch(WORKER_URL + '/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: controller ? controller.signal : undefined
+      });
+      if (timer) clearTimeout(timer);
+      var rawText = await response.text();
+      var apiResp;
+      try { apiResp = JSON.parse(rawText); }
+      catch (e) { lastErr = 'service returned a non-JSON page (HTTP ' + response.status + ')'; continue; }
+      var errObj = apiResp && apiResp.error;
+      if (errObj) {
+        var etype = typeof errObj === 'object' ? (errObj.type || '') : '';
+        var emsg = typeof errObj === 'object' ? (errObj.message || 'API error') : String(errObj);
+        if (TRANSIENT_API_ERRORS.indexOf(etype) !== -1 || typeof errObj === 'string' || response.status >= 500) {
+          lastErr = etype ? etype.replace(/_/g, ' ') : emsg;
+          continue;
+        }
+        var friendly = etype === 'authentication_error'
+          ? 'the worker’s Anthropic API key was rejected — check ANTHROPIC_API_KEY on the worker'
+          : emsg;
+        var permErr = new Error(friendly);
+        permErr.permanent = true;
+        throw permErr;
+      }
+      return apiResp;
+    } catch (err) {
+      if (timer) clearTimeout(timer);
+      if (err.permanent) throw err;
+      if (err && err.name === 'AbortError') { lastErr = 'timed out after 2 minutes'; continue; }
+      lastErr = 'network error — worker unreachable';
+      continue;
+    }
+  }
+  throw new Error('gave up after ' + (retries + 1) + ' attempts — last problem: ' + lastErr + '. This is usually a temporary rate limit; wait a minute and hit Retry.');
+}
+
+// Pull the first JSON object out of the model's reply (tolerates ```json fences).
+function extractJSONFromResponse(apiResp) {
+  var textContent = (apiResp.content || []).filter(function(b) { return b.type === 'text'; }).map(function(b) { return b.text; }).join('');
+  textContent = textContent.replace(/```json|```/g, '');
+  var braceStart = textContent.indexOf('{');
+  if (braceStart === -1) throw new Error('the AI reply contained no JSON — try scanning again');
+  var depth = 0, end = -1;
+  for (var i = braceStart; i < textContent.length; i++) {
+    if (textContent[i] === '{') depth++;
+    else if (textContent[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
+  }
+  return JSON.parse(end !== -1 ? textContent.substring(braceStart, end + 1) : textContent.substring(braceStart));
+}
+
+// ═══ SCAN ERROR BANNER + RETRY ═══
+function ensureScanErrorBanner() {
+  var b = document.getElementById('scanErrorBanner');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'scanErrorBanner';
+    b.style.cssText = 'background:rgba(255,107,74,.08);border:1px solid rgba(255,107,74,.4);border-radius:8px;padding:12px 14px;margin-top:14px;font-size:12px;color:var(--accent2);display:none;align-items:center;gap:10px;flex-wrap:wrap;';
+    var dz = document.getElementById('dropZone');
+    dz.parentElement.insertBefore(b, dz.nextSibling);
+  }
+  return b;
+}
+function showScanError(msg) {
+  var b = ensureScanErrorBanner();
+  b.innerHTML = '<span style="font-size:15px">⚠</span><span style="flex:1;min-width:200px">Scan failed: ' + escHtml(msg) + '</span>' +
+    (window._lastScanFile ? '<button class="btn btn-secondary" style="font-size:11px;padding:6px 14px;white-space:nowrap" onclick="retryLastScan()">↻ Retry scan</button>' : '');
+  b.style.display = 'flex';
+}
+function hideScanError() {
+  var b = document.getElementById('scanErrorBanner');
+  if (b) b.style.display = 'none';
+}
+function retryLastScan() {
+  if (window._lastScanFile) extractWithAI(window._lastScanFile, window._lastScanIsInvoice);
+}
+
 async function extractWithAI(file, isInvoice) {
   const loadingEl = isInvoice ? document.getElementById('invoiceLoading') : document.getElementById('loadingState');
   const loadingText = document.getElementById('loadingText');
+  const setStatus = function(msg) {
+    if (!isInvoice && loadingText) { loadingText.textContent = msg; }
+    else { var sp = loadingEl.querySelector('span'); if (sp) sp.textContent = msg; }
+  };
+  // Stash the file so a failed scan can be retried without re-picking it
+  window._lastScanFile = file;
+  window._lastScanIsInvoice = isInvoice;
+  hideScanError();
   loadingEl.classList.add('visible');
-  if (!isInvoice) { document.getElementById('extractedForm').classList.remove('visible'); if (loadingText) loadingText.textContent = 'Scanning document with AI...'; }
+  if (!isInvoice) document.getElementById('extractedForm').classList.remove('visible');
+  setStatus(isInvoice ? 'Reading invoice...' : 'Scanning document with AI...');
   try {
     const base64 = await fileToBase64(file);
     const mediaType = file.type || 'image/jpeg';
@@ -644,28 +751,24 @@ async function extractWithAI(file, isInvoice) {
     const userContent = isPdf
       ? [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 }, citations: { enabled: false } }, { type: 'text', text: 'Extract the key fields from this document.' }]
       : [{ type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } }, { type: 'text', text: 'Extract the key fields from this document.' }];
-    const response = await fetch(WORKER_URL + '/api/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 512, system: isInvoice ? sysInvoice : sysOrder, messages: [{ role: 'user', content: userContent }] })
-    });
-    const rawText = await response.text();
-    let extracted = null;
-    try {
-      const apiResp = JSON.parse(rawText);
-      if (apiResp.error) throw new Error(apiResp.error.message || 'API error');
-      const textContent = (apiResp.content || []).filter(function(b){ return b.type === 'text'; }).map(function(b){ return b.text; }).join('');
-      const braceStart = textContent.indexOf('{');
-      if (braceStart !== -1) { let depth = 0, end = -1; for (let i = braceStart; i < textContent.length; i++) { if (textContent[i] === '{') depth++; else if (textContent[i] === '}') { depth--; if (depth === 0) { end = i; break; } } } const jsonStr = end !== -1 ? textContent.substring(braceStart, end + 1) : textContent.substring(braceStart); extracted = JSON.parse(jsonStr); }
-    } catch(parseErr) { console.error('Parse error:', parseErr.message); throw parseErr; }
-    if (!extracted) throw new Error('No JSON found in response');
+    const apiResp = await callClaude(
+      { model: 'claude-sonnet-4-6', max_tokens: 512, system: isInvoice ? sysInvoice : sysOrder, messages: [{ role: 'user', content: userContent }] },
+      setStatus
+    );
+    const extracted = extractJSONFromResponse(apiResp);
     loadingEl.classList.remove('visible');
+    setStatus(isInvoice ? 'Reading invoice...' : 'Scanning document with AI...');
     if (isInvoice) applyInvoiceToOrder(extracted); else populateForm(extracted);
   } catch(err) {
     loadingEl.classList.remove('visible');
-    showToast('Could not parse document - please fill in manually');
-    if (!isInvoice) document.getElementById('extractedForm').classList.add('visible');
+    setStatus(isInvoice ? 'Reading invoice...' : 'Scanning document with AI...');
     console.error('Extraction error:', err);
+    if (isInvoice) {
+      showToast('Invoice scan failed: ' + err.message);
+    } else {
+      showScanError(err.message);
+      document.getElementById('extractedForm').classList.add('visible');
+    }
   }
 }
 
@@ -1128,6 +1231,8 @@ function clearForm() {
   document.getElementById('extractedForm').classList.remove('visible'); document.getElementById('lineItemsSection').style.display = 'none'; document.getElementById('lineItemsContainer').innerHTML = ''; document.getElementById('fileInput').value = '';
   window._scanMatchInfo = null;
   window._scanDocType = '';
+  window._lastScanFile = null;
+  hideScanError();
   var hintBadge = document.getElementById('dupeHintBadge');
   if (hintBadge) hintBadge.style.display = 'none';
   var poBadge = document.getElementById('poFillBadge');
@@ -1149,35 +1254,20 @@ async function parseSGPDF(file) {
     const base64 = await fileToBase64(file);
     const systemPrompt = 'You are extracting data from a Smart Glazier "Purchase Orders" tabular report. Extract EVERY row from EVERY page. The columns are: Purchase ID (e.g. "26022-2"), Division (Residential or Commercial), Owner (e.g. "Dion Harrison"), Customer (e.g. "Hines Homes" or "Grand Homes North Division"), Reference (e.g. "222 Abington" or "1011 Hackberry - Shower Glass" — usually a street address, sometimes with a job descriptor), Ordered date, Expected date, Items Ordered, Items Outstanding, Net Total, Gross Total. Some report layouts also include a per-row Supplier column (e.g. "Imperial Glass", "Sky Building Inc.", "FHC") between Reference and the dates — if present, use that value as each row\'s vendor. Alternatively the report MAY be grouped by supplier (vendor) with section headers like "Supplier : FHC" or "Supplier : Imperial Glass" — if supplier sections exist, assign each order to the correct supplier. If neither appears, leave vendor blank. Return ONLY valid JSON (no markdown fences, no commentary) in this exact shape: {"orders":[{"po":"","division":"Residential","customer":"","reference":"","ordered":"YYYY-MM-DD","expected":"YYYY-MM-DD","items_ordered":0,"items_outstanding":0,"net_total":0,"vendor":""}]}. Dates MUST be YYYY-MM-DD. net_total is a number (no $ or commas). Be thorough — do not skip any rows. Include rows even when amount is $0.';
 
-    const response = await fetch(WORKER_URL + '/api/messages', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        model:'claude-sonnet-4-6',
-        max_tokens:16000,
-        system:systemPrompt,
-        messages:[{
-          role:'user',
-          content:[
-            { type:'document', source:{ type:'base64', media_type:'application/pdf', data:base64 }, citations:{ enabled:false } },
-            { type:'text', text:'Extract every purchase order row from this Smart Glazier report. Return the JSON only.' }
-          ]
-        }]
-      })
-    });
+    const apiResp = await callClaude({
+      model:'claude-sonnet-4-6',
+      max_tokens:16000,
+      system:systemPrompt,
+      messages:[{
+        role:'user',
+        content:[
+          { type:'document', source:{ type:'base64', media_type:'application/pdf', data:base64 }, citations:{ enabled:false } },
+          { type:'text', text:'Extract every purchase order row from this Smart Glazier report. Return the JSON only.' }
+        ]
+      }]
+    }, function(msg) { if (loadingSpan) loadingSpan.textContent = msg; });
 
-    const apiResp = await response.json();
-    if (apiResp.error) throw new Error(apiResp.error.message || 'API error');
-    const textContent = (apiResp.content || []).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
-    const braceStart = textContent.indexOf('{');
-    if (braceStart === -1) throw new Error('No JSON found in AI response');
-    let depth=0, end=-1;
-    for (let i=braceStart; i<textContent.length; i++) {
-      if (textContent[i]==='{') depth++;
-      else if (textContent[i]==='}') { depth--; if (depth===0) { end=i; break; } }
-    }
-    const jsonStr = end !== -1 ? textContent.substring(braceStart, end+1) : textContent.substring(braceStart);
-    const parsed = JSON.parse(jsonStr);
+    const parsed = extractJSONFromResponse(apiResp);
     if (!parsed.orders || !Array.isArray(parsed.orders)) throw new Error('No orders array in AI response');
 
     // Map raw vendor strings to canonical short codes (shared registry matcher)
